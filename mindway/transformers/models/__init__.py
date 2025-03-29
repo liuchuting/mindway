@@ -19,4 +19,6 @@ from . import (
     t5,
     umt5,
     xlm_roberta,
+    myt5,
+    switch_transformers,
 )
