@@ -1353,7 +1353,7 @@ class BigBirdAttention(nn.Cell):
         self.self = attn_weights
         self.attention_type = value
         if not self.training:
-            self.self.eval()
+            self.self.set_train(False)
 
     def construct(
         self,
