@@ -1,4 +1,4 @@
 from .modeling_big_bird import *
 from .configuration_big_bird import *
-from tokenization_big_bird import *
-from tokenization_big_bird_fast import *
+from .tokenization_big_bird import *
+from .tokenization_big_bird_fast import *
