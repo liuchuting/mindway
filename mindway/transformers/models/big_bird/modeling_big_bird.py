@@ -2300,13 +2300,16 @@ class BigBirdForPreTraining(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> from transformers import AutoTokenizer, BigBirdForPreTraining
-        >>> import torch
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForPreTraining
+        >>> import mindspore
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-roberta-base")
         >>> model = BigBirdForPreTraining.from_pretrained("google/bigbird-roberta-base")
 
-        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="pt")
+        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="np")
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
         >>> outputs = model(**inputs)
 
         >>> prediction_logits = outputs.prediction_logits
@@ -2405,8 +2408,9 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> import torch
-        >>> from transformers import AutoTokenizer, BigBirdForMaskedLM
+        >>> import mindspore
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForMaskedLM
         >>> from datasets import load_dataset
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-roberta-base")
@@ -2421,12 +2425,13 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
 
         >>> # add mask_token
         >>> LONG_ARTICLE_TO_MASK = LONG_ARTICLE_TARGET.replace("maximum", "[MASK]")
-        >>> inputs = tokenizer(LONG_ARTICLE_TO_MASK, return_tensors="pt")
+        >>> inputs = tokenizer(LONG_ARTICLE_TO_MASK, return_tensors="np")
         >>> # long article input
         >>> list(inputs["input_ids"].shape)
         [1, 919]
-
-        >>> with torch.no_grad():
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
+        >>> with mindspore._no_grad():
         ...     logits = model(**inputs).logits
         >>> # retrieve index of [MASK]
         >>> mask_token_index = (inputs.input_ids == tokenizer.mask_token_id)[0].nonzero(as_tuple=True)[0]
@@ -2436,8 +2441,10 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
         ```
 
         ```python
-        >>> labels = tokenizer(LONG_ARTICLE_TARGET, return_tensors="pt")["input_ids"]
+        >>> labels = tokenizer(LONG_ARTICLE_TARGET, return_tensors="np")["input_ids"]
         >>> labels = mint.where(inputs.input_ids == tokenizer.mask_token_id, labels, -100)
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
         >>> outputs = model(**inputs, labels=labels)
         >>> round(outputs.loss.item(), 2)
         1.99
@@ -2688,7 +2695,8 @@ class BigBirdForSequenceClassification(BigBirdPreTrainedModel):
 
         ```python
         >>> import mindspore as ms
-        >>> from transformers import AutoTokenizer, BigBirdForSequenceClassification
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForSequenceClassification
         >>> from datasets import load_dataset
 
         >>> tokenizer = AutoTokenizer.from_pretrained("l-yohai/bigbird-roberta-base-mnli")
@@ -2696,12 +2704,13 @@ class BigBirdForSequenceClassification(BigBirdPreTrainedModel):
         >>> squad_ds = load_dataset("rajpurkar/squad_v2", split="train")  # doctest: +IGNORE_RESULT
 
         >>> LONG_ARTICLE = squad_ds[81514]["context"]
-        >>> inputs = tokenizer(LONG_ARTICLE, return_tensors="pt")
+        >>> inputs = tokenizer(LONG_ARTICLE, return_tensors="np")
         >>> # long input article
         >>> list(inputs["input_ids"].shape)
         [1, 919]
-
-        >>> with torch.no_grad():
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
+        >>> with ms._no_grad():
         ...     logits = model(**inputs).logits
         >>> predicted_class_id = logits.argmax().item()
         >>> model.config.id2label[predicted_class_id]
@@ -3016,8 +3025,9 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> import torch
-        >>> from transformers import AutoTokenizer, BigBirdForQuestionAnswering
+        >>> import mindspore
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForQuestionAnswering
         >>> from datasets import load_dataset
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-roberta-base")
@@ -3030,12 +3040,13 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         >>> QUESTION
         'During daytime how high can the temperatures reach?'
 
-        >>> inputs = tokenizer(QUESTION, LONG_ARTICLE, return_tensors="pt")
+        >>> inputs = tokenizer(QUESTION, LONG_ARTICLE, return_tensors="np")
         >>> # long article and question input
         >>> list(inputs["input_ids"].shape)
         [1, 929]
-
-        >>> with torch.no_grad():
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
+        >>> with mindspore._no_grad():
         ...     outputs = model(**inputs)
 
         >>> answer_start_index = outputs.start_logits.argmax()
