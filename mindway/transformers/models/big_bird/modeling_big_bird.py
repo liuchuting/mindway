@@ -250,7 +250,7 @@ class BigBirdEmbeddings(nn.Cell):
         self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
-        self.position_ids = mint.arange(config.max_position_embeddings).expand((1, -1))
+        self.position_ids = mint.arange(config.max_position_embeddings).broadcast_to((1, -1))
         self.token_type_ids =  mint.zeros(self.position_ids.shape, dtype=ms.int64)
         # self.register_buffer(
         #     "position_ids", mint.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
@@ -282,7 +282,7 @@ class BigBirdEmbeddings(nn.Cell):
         if token_type_ids is None:
             if hasattr(self, "token_type_ids"):
                 buffered_token_type_ids = self.token_type_ids[:, :seq_length]
-                buffered_token_type_ids_expanded = buffered_token_type_ids.expand(input_shape[0], seq_length)
+                buffered_token_type_ids_expanded = buffered_token_type_ids.broadcast_to(input_shape[0], seq_length)
                 token_type_ids = buffered_token_type_ids_expanded
             else:
                 token_type_ids = mint.zeros(input_shape, dtype=ms.int64)
@@ -2036,7 +2036,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
         if token_type_ids is None:
             if hasattr(self.embeddings, "token_type_ids"):
                 buffered_token_type_ids = self.embeddings.token_type_ids[:, :seq_length]
-                buffered_token_type_ids_expanded = buffered_token_type_ids.expand(batch_size, seq_length)
+                buffered_token_type_ids_expanded = buffered_token_type_ids.broadcast_to(batch_size, seq_length)
                 token_type_ids = buffered_token_type_ids_expanded
             else:
                 token_type_ids = mint.zeros(input_shape, dtype=ms.int64)
