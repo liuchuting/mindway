@@ -2048,7 +2048,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
         max_tokens_to_attend = (5 + 2 * self.config.num_random_blocks) * self.config.block_size
         if self.attention_type == "block_sparse" and seq_length <= max_tokens_to_attend:
             # change attention_type from block_sparse to original_full
-            sequence_length = input_ids.size(1) if input_ids is not None else inputs_embeds.size(1)
+            sequence_length = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
             logger.warning(
                 "Attention type 'block_sparse' is not possible if sequence_length: "
                 f"{sequence_length} <= num global tokens: 2 * config.block_size "
@@ -2819,12 +2819,12 @@ class BigBirdForMultipleChoice(BigBirdPreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
-        input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
-        attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
-        position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
+        input_ids = input_ids.view(-1, input_ids.shape[-1]) if input_ids is not None else None
+        attention_mask = attention_mask.view(-1, attention_mask.shape[-1]) if attention_mask is not None else None
+        token_type_ids = token_type_ids.view(-1, token_type_ids.shape[-1]) if token_type_ids is not None else None
+        position_ids = position_ids.view(-1, position_ids.shape[-1]) if position_ids is not None else None
         inputs_embeds = (
-            inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
+            inputs_embeds.view(-1, inputs_embeds.shape[-2], inputs_embeds.shape[-1])
             if inputs_embeds is not None
             else None
         )
@@ -3052,7 +3052,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        seqlen = input_ids.size(1) if input_ids is not None else inputs_embeds.size(1)
+        seqlen = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
         if question_lengths is None and input_ids is not None:
             # assuming input_ids format: <cls> <question> <sep> context <sep>
@@ -3100,7 +3100,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
             if len(end_positions.shape) > 1:
                 end_positions = end_positions.squeeze(-1)
             # sometimes the start/end positions are outside our model inputs, we ignore these terms
-            ignored_index = start_logits.size(1)
+            ignored_index = start_logits.shape[1]
             start_positions = start_positions.clamp(0, ignored_index)
             end_positions = end_positions.clamp(0, ignored_index)
 
