@@ -251,12 +251,12 @@ class BigBirdEmbeddings(nn.Cell):
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
         self.position_ids = mint.arange(config.max_position_embeddings).expand((1, -1))
-        self.token_type_ids =  mint.zeros(self.position_ids.size(), dtype=ms.int64)
+        self.token_type_ids =  mint.zeros(self.position_ids.shape, dtype=ms.int64)
         # self.register_buffer(
         #     "position_ids", mint.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
         # )
         # self.register_buffer(
-        #     "token_type_ids", mint.zeros(self.position_ids.size(), dtype=ms.int64), persistent=False
+        #     "token_type_ids", mint.zeros(self.position_ids.shape, dtype=ms.int64), persistent=False
         # )
         # End copy
 
@@ -267,9 +267,9 @@ class BigBirdEmbeddings(nn.Cell):
         self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, past_key_values_length=0
     ):
         if input_ids is not None:
-            input_shape = input_ids.size()
+            input_shape = input_ids.shape
         else:
-            input_shape = inputs_embeds.size()[:-1]
+            input_shape = inputs_embeds.shape[:-1]
 
         seq_length = input_shape[1]
 
@@ -326,7 +326,7 @@ class BigBirdSelfAttention(nn.Cell):
         self.is_decoder = config.is_decoder
 
     def transpose_for_scores(self, x):
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        new_x_shape = x.shape[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
@@ -399,7 +399,7 @@ class BigBirdSelfAttention(nn.Cell):
         context_layer = mint.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
         outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
@@ -434,7 +434,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
         self.value = mint.nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
 
     def transpose_for_scores(self, x):
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        new_x_shape = x.shape[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
@@ -450,7 +450,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
     ):
         # Currently this `class` can't be used in decoder.
 
-        batch_size, seqlen, _ = hidden_states.size()
+        batch_size, seqlen, _ = hidden_states.shape
         to_seq_length = from_seq_length = seqlen
         from_block_size = to_block_size = self.block_size
 
@@ -2020,9 +2020,9 @@ class BigBirdModel(BigBirdPreTrainedModel):
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             self.warn_if_padding_and_no_attention_mask(input_ids, attention_mask)
-            input_shape = input_ids.size()
+            input_shape = input_ids.shape
         elif inputs_embeds is not None:
-            input_shape = inputs_embeds.size()[:-1]
+            input_shape = inputs_embeds.shape[:-1]
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
@@ -2104,7 +2104,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
         # If a 2D or 3D attention mask is provided for the cross-attention
         # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
         if self.config.is_decoder and encoder_hidden_states is not None:
-            encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.size()
+            encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.shape
             encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
             if encoder_attention_mask is None:
                 encoder_attention_mask = mint.ones(encoder_hidden_shape, device=device)
@@ -2166,7 +2166,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
 
     @staticmethod
     def create_masks_for_block_sparse_attn(attention_mask: ms.Tensor, block_size: int):
-        batch_size, seq_length = attention_mask.size()
+        batch_size, seq_length = attention_mask.shape
         if seq_length % block_size != 0:
             raise ValueError(
                 f"Sequence length must be multiple of block size, but sequence length is {seq_length}, while block"
@@ -3066,7 +3066,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
             # setting lengths logits to `-inf`
             logits_mask = self.prepare_question_mask(question_lengths, seqlen)
             if token_type_ids is None:
-                token_type_ids = mint.ones(logits_mask.size(), dtype=int, device=logits_mask.device) - logits_mask
+                token_type_ids = mint.ones(logits_mask.shape, dtype=int, device=logits_mask.device) - logits_mask
             logits_mask = logits_mask
             logits_mask[:, 0] = False
             logits_mask.unsqueeze_(2)
@@ -3097,9 +3097,9 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         total_loss = None
         if start_positions is not None and end_positions is not None:
             # If we are on multi-GPU, split add a dimension
-            if len(start_positions.size()) > 1:
+            if len(start_positions.shape) > 1:
                 start_positions = start_positions.squeeze(-1)
-            if len(end_positions.size()) > 1:
+            if len(end_positions.shape) > 1:
                 end_positions = end_positions.squeeze(-1)
             # sometimes the start/end positions are outside our model inputs, we ignore these terms
             ignored_index = start_logits.size(1)
