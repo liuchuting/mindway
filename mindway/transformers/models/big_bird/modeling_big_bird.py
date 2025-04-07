@@ -587,7 +587,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
 
         rand_attn = np.stack(rand_attn, axis=0)
         rand_attn = ms.Tensor(rand_attn, dtype=ms.int64)
-        rand_attn.unsqueeze(0)
+        rand_attn = rand_attn.unsqueeze(0)
         rand_attn = mint.cat([rand_attn for _ in range(batch_size)], dim=0)
 
         rand_mask = self._create_rand_mask_from_inputs(
@@ -623,7 +623,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
         first_context_layer = self.torch_bmm_nd(first_attn_weights, value_layer, ndim=4)
-        first_context_layer.unsqueeze(2)
+        first_context_layer = first_context_layer.unsqueeze(2)
 
         # 2nd PART
         # 2nd block attention scores
@@ -678,7 +678,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
         second_context_layer = self.torch_bmm_nd(second_attn_weights, second_value_mat, ndim=4)
 
-        second_context_layer.unsqueeze(2)
+        second_context_layer = second_context_layer.unsqueeze(2)
 
         # 3rd PART
         # Middle blocks attention scores
@@ -811,7 +811,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
 
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
         second_last_context_layer = self.torch_bmm_nd(second_last_attn_weights, second_last_value_mat, ndim=4)
-        second_last_context_layer.unsqueeze(2)
+        second_last_context_layer = second_last_context_layer.unsqueeze(2)
 
         # 5th PART
         # last block (global) attention scores
@@ -825,7 +825,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
         last_context_layer = self.torch_bmm_nd(last_attn_weights, value_layer, ndim=4)
-        last_context_layer.unsqueeze(2)
+        last_context_layer = last_context_layer.unsqueeze(2)
 
         # combining representations of all tokens
         context_layer = mint.cat(
@@ -2190,7 +2190,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
                 [to_blocked_mask[:, 1:-3], to_blocked_mask[:, 2:-2], to_blocked_mask[:, 3:-1]], dim=2
             )
             band_mask = mint.einsum("blq,blk->blqk", from_blocked_mask[:, 2:-2], exp_blocked_to_pad)
-            band_mask.unsqueeze(1)
+            band_mask = band_mask.unsqueeze(1)
             return band_mask
 
         blocked_encoder_mask = attention_mask.view(batch_size, seq_length // block_size, block_size)
@@ -3068,7 +3068,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         if question_lengths is None and input_ids is not None:
             # assuming input_ids format: <cls> <question> <sep> context <sep>
             question_lengths = mint.argmax(input_ids.eq(self.sep_token_id).int(), dim=-1) + 1
-            question_lengths.unsqueeze(1)
+            question_lengths = question_lengths.unsqueeze(1)
 
         logits_mask = None
         if question_lengths is not None:
@@ -3078,7 +3078,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
                 token_type_ids = mint.ones(logits_mask.shape, dtype=int) - logits_mask
             logits_mask = logits_mask
             logits_mask[:, 0] = False
-            logits_mask.unsqueeze(2)
+            logits_mask = logits_mask.unsqueeze(2)
 
         outputs = self.bert(
             input_ids,
@@ -3137,7 +3137,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
     def prepare_question_mask(q_lengths: ms.Tensor, maxlen: int):
         # q_lengths -> (bz, 1)
         mask = mint.arange(0, maxlen)
-        mask.unsqueeze(0)  # -> (1, maxlen)
+        mask = mask.unsqueeze(0)  # -> (1, maxlen)
         mask = mint.where(mask < q_lengths, 1, 0)
         return mask
 
