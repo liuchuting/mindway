@@ -2408,7 +2408,8 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> import mindspore
+        >>> import mindspore as ms
+        >>> from mindspore import mint
         >>> from transformers import AutoTokenizer
         >>> from mindway import BigBirdForMaskedLM
         >>> from datasets import load_dataset
@@ -2442,7 +2443,7 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
 
         ```python
         >>> labels = tokenizer(LONG_ARTICLE_TARGET, return_tensors="np")["input_ids"]
-        >>> labels = mint.where(inputs.input_ids == tokenizer.mask_token_id, labels, -100)
+        >>> labels = mint.where(ms.tensor(inputs.input_ids) == mindspore.tensor(tokenizer.mask_token_id), ms.tensor(labels), -100)
         >>> for k, v in inputs.items():
         ...     inputs[k] = mindspore.tensor(v)
         >>> outputs = model(**inputs, labels=labels)
@@ -3075,7 +3076,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
             # setting lengths logits to `-inf`
             logits_mask = self.prepare_question_mask(question_lengths, seqlen)
             if token_type_ids is None:
-                token_type_ids = mint.ones(logits_mask.shape, dtype=int) - logits_mask
+                token_type_ids = mint.ones(logits_mask.shape, dtype=ms.int32) - logits_mask
             logits_mask = logits_mask
             logits_mask[:, 0] = False
             logits_mask = logits_mask.unsqueeze(2)
