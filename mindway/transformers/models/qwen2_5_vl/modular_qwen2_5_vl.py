@@ -285,6 +285,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
     def rot_pos_emb(self, grid_thw):
         pos_ids = []
         for t, h, w in grid_thw:
+            t, h, w = t.item(), h.item(), w.item()
             hpos_ids = ops.arange(h).unsqueeze(1).broadcast_to((-1, w))
             hpos_ids = hpos_ids.reshape(
                 h // self.spatial_merge_size,
@@ -318,6 +319,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
         vit_merger_window_size = self.window_size // self.spatial_merge_size // self.patch_size
 
         for grid_t, grid_h, grid_w in grid_thw:
+            grid_t, grid_h, grid_w = grid_t.item(), grid_h.item(), grid_w.item()
             llm_grid_h, llm_grid_w = (
                 grid_h // self.spatial_merge_size,
                 grid_w // self.spatial_merge_size,
@@ -347,7 +349,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
             window_index.append(index_new + window_index_id)
             cu_seqlens_tmp = seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1]
             cu_window_seqlens.extend(cu_seqlens_tmp.tolist())
-            window_index_id += (grid_t * llm_grid_h * llm_grid_w).item()
+            window_index_id += (grid_t * llm_grid_h * llm_grid_w)
         window_index = mint.cat(window_index, dim=0)
 
         return window_index, cu_window_seqlens
@@ -372,7 +374,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
         )
         cu_window_seqlens = mint.unique_consecutive(cu_window_seqlens)
 
-        seq_len, _ = hidden_states.size()
+        seq_len, _ = hidden_states.shape
         hidden_states = hidden_states.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
         hidden_states = hidden_states[window_index, :, :]
         hidden_states = hidden_states.reshape(seq_len, -1)
