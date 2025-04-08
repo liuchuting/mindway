@@ -1135,11 +1135,12 @@ def append_new_import_node(
     Also modifies `added_names` in-place accordingly."""
     import_node = node.body[0]
     names_to_keep = []
-    for name in import_node.names:
-        name_value = name.evaluated_name
-        if name_value not in unused_imports and name_value not in added_names:
-            names_to_keep.append(name.with_changes(comma=cst.MaybeSentinel.DEFAULT))
-            added_names.add(name_value)
+    if hasattr(import_node, "names"):
+        for name in import_node.names:
+            name_value = name.evaluated_name
+            if name_value not in unused_imports and name_value not in added_names:
+                names_to_keep.append(name.with_changes(comma=cst.MaybeSentinel.DEFAULT))
+                added_names.add(name_value)
     if len(names_to_keep) > 0:
         new_node = node.with_changes(body=[import_node.with_changes(names=names_to_keep)])
         imports_to_keep.append(new_node)
