@@ -27,8 +27,8 @@ import mindspore as ms
 from mindspore import mint, nn
 import mindspore.mint.nn.functional as F
 
-from transformers.models.qwen2_vl.configuration_qwen2_vl import Qwen2VLConfig
-from transformers.models.qwen2_vl.modeling_qwen2_vl import (
+from mindway.transformers.models.qwen2_vl import Qwen2VLConfig
+from mindway.transformers.models.qwen2_vl.modeling_qwen2_vl import (
     PatchEmbed,
     PatchMerger,
     Qwen2RMSNorm,
@@ -40,7 +40,7 @@ from transformers.models.qwen2_vl.modeling_qwen2_vl import (
     VisionRotaryEmbedding,
     VisionSdpaAttention,
 )
-from transformers.models.qwen2_vl.processing_qwen2_vl import Qwen2VLProcessor
+from mindway.transformers.models.qwen2_vl.processing_qwen2_vl import Qwen2VLProcessor
 
 from ...activations import ACT2FN
 from transformers import PretrainedConfig
