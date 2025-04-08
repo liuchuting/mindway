@@ -3026,7 +3026,7 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> import mindspore
+        >>> import mindspore as ms
         >>> from transformers import AutoTokenizer
         >>> from mindway import BigBirdForQuestionAnswering
         >>> from datasets import load_dataset
@@ -3046,8 +3046,8 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         >>> list(inputs["input_ids"].shape)
         [1, 929]
         >>> for k, v in inputs.items():
-        ...     inputs[k] = mindspore.tensor(v)
-        >>> with mindspore._no_grad():
+        ...     inputs[k] = ms.tensor(v)
+        >>> with ms._no_grad():
         ...     outputs = model(**inputs)
 
         >>> answer_start_index = outputs.start_logits.argmax()
