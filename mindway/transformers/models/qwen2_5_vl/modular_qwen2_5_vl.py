@@ -285,7 +285,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
     def rot_pos_emb(self, grid_thw):
         pos_ids = []
         for t, h, w in grid_thw:
-            hpos_ids = mint.arange(h).unsqueeze(1).broadcast_to(-1, w)
+            hpos_ids = ops.arange(h).unsqueeze(1).broadcast_to((-1, w))
             hpos_ids = hpos_ids.reshape(
                 h // self.spatial_merge_size,
                 self.spatial_merge_size,
@@ -295,7 +295,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
             hpos_ids = hpos_ids.permute(0, 2, 1, 3)
             hpos_ids = hpos_ids.flatten()
 
-            wpos_ids = mint.arange(w).unsqueeze(0).broadcast_to(h, -1)
+            wpos_ids = ops.arange(w).unsqueeze(0).broadcast_to((h, -1))
             wpos_ids = wpos_ids.reshape(
                 h // self.spatial_merge_size,
                 self.spatial_merge_size,
@@ -322,7 +322,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
                 grid_h // self.spatial_merge_size,
                 grid_w // self.spatial_merge_size,
             )
-            index = mint.arange(grid_t * llm_grid_h * llm_grid_w).reshape(grid_t, llm_grid_h, llm_grid_w)
+            index = ops.arange(grid_t * llm_grid_h * llm_grid_w).reshape(grid_t, llm_grid_h, llm_grid_w)
             pad_h = vit_merger_window_size - llm_grid_h % vit_merger_window_size
             pad_w = vit_merger_window_size - llm_grid_w % vit_merger_window_size
             num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size
@@ -551,25 +551,25 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     text_len = ed - st
 
                     st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
-                    llm_pos_ids_list.append(mint.arange(text_len).view(1, -1).broadcast_to(3, -1) + st_idx)
+                    llm_pos_ids_list.append(ops.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
 
-                    range_tensor = mint.arange(llm_grid_t).view(-1, 1)
-                    expanded_range = range_tensor.broadcast_to(-1, llm_grid_h * llm_grid_w)
+                    range_tensor = ops.arange(llm_grid_t).view(-1, 1)
+                    expanded_range = range_tensor.broadcast_to((-1, llm_grid_h * llm_grid_w))
 
                     time_tensor = expanded_range * second_per_grid_t * self.config.vision_config.tokens_per_second
 
                     time_tensor_long = time_tensor.long()
                     t_index = time_tensor_long.flatten()
 
-                    h_index = mint.arange(llm_grid_h).view(1, -1, 1).broadcast_to(llm_grid_t, -1, llm_grid_w).flatten()
-                    w_index = mint.arange(llm_grid_w).view(1, 1, -1).broadcast_to(llm_grid_t, llm_grid_h, -1).flatten()
+                    h_index = ops.arange(llm_grid_h).view(1, -1, 1).broadcast_to((llm_grid_t, -1, llm_grid_w)).flatten()
+                    w_index = ops.arange(llm_grid_w).view(1, 1, -1).broadcast_to((llm_grid_t, llm_grid_h, -1)).flatten()
                     llm_pos_ids_list.append(mint.stack([t_index, h_index, w_index]) + text_len + st_idx)
                     st = ed + llm_grid_t * llm_grid_h * llm_grid_w
 
                 if st < len(input_tokens):
                     st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                     text_len = len(input_tokens) - st
-                    llm_pos_ids_list.append(mint.arange(text_len).view(1, -1).broadcast_to(3, -1) + st_idx)
+                    llm_pos_ids_list.append(ops.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
 
                 llm_positions = mint.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
                 position_ids[..., i, attention_mask[i] == 1] = llm_positions
@@ -580,14 +580,14 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
             if attention_mask is not None:
                 position_ids = attention_mask.long().cumsum(-1) - 1
                 position_ids.masked_fill_(attention_mask == 0, 1)
-                position_ids = position_ids.unsqueeze(0).broadcast_to(3, -1, -1)
+                position_ids = position_ids.unsqueeze(0).broadcast_to((3, -1, -1))
                 max_position_ids = position_ids.max(0, keepdim=False)[0].max(-1, keepdim=True)[0]
                 mrope_position_deltas = max_position_ids + 1 - attention_mask.shape[-1]
             else:
                 position_ids = (
-                    mint.arange(input_ids.shape[1])
+                    ops.arange(input_ids.shape[1])
                     .view(1, 1, -1)
-                    .broadcast_to(3, input_ids.shape[0], -1)
+                    .broadcast_to((3, input_ids.shape[0], -1))
                 )
                 mrope_position_deltas = mint.zeros(
                     [input_ids.shape[0], 1],
@@ -723,12 +723,12 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     if cache_position is not None
                     else 0
                 )
-                position_ids = mint.arange(seq_length)
-                position_ids = position_ids.view(1, -1).broadcast_to(batch_size, -1)
+                position_ids = ops.arange(seq_length)
+                position_ids = position_ids.view(1, -1).broadcast_to((batch_size, -1))
                 if cache_position is not None:  # otherwise `deltas` is an int `0`
                     delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=0)
                 position_ids = position_ids.add(delta)
-                position_ids = position_ids.unsqueeze(0).broadcast_to(3, -1, -1)
+                position_ids = position_ids.unsqueeze(0).broadcast_to((3, -1, -1))
 
         outputs = self.model(
             input_ids=None,
