@@ -1657,7 +1657,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         )
         return model_inputs
 
-
+'''
 if __name__ == "__main__":
     # Debug and testing use only
 
@@ -1815,3 +1815,4 @@ if __name__ == "__main__":
         print("*" * 100)
     except RuntimeError:
         raise RuntimeError("Run Qwen2VLProcessor.decode() Error.")
+'''
