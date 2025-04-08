@@ -28,7 +28,7 @@ from libcst import ClassDef, CSTVisitor
 from libcst import matchers as m
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider, ScopeProvider
 
-from .logging import logging
+from transformers import logging
 from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
 
 
@@ -1748,6 +1748,6 @@ if __name__ == "__main__":
 
     for file_name in priority_list:
         print(f"Converting {file_name} to a single model single file format")
-        module_path = file_name.replace("/", ".").replace(".py", "").replace("mindway.", "")
+        module_path = file_name.replace("/", ".").replace(".py", "") # .replace("mindway.", "")
         converted_files = convert_modular_file(file_name)
         converter = save_modeling_file(file_name, converted_files)

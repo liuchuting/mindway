@@ -27,7 +27,7 @@ import mindspore as ms
 from mindspore import mint, nn
 import mindspore.mint.nn.functional as F
 
-from mindway.transformers.models.qwen2_vl import Qwen2VLConfig
+from mindway.transformers.models.qwen2_vl.configuration_qwen2_5_vl import Qwen2VLConfig
 from mindway.transformers.models.qwen2_vl.modeling_qwen2_vl import (
     PatchEmbed,
     PatchMerger,
