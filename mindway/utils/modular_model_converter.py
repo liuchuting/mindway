@@ -1333,7 +1333,7 @@ class ModularFileMapper(ModuleMapper):
         # Note that we may visit several of the same file types, thus we save them per file type, not file
         self.imported_objects_per_file = defaultdict(set)
         for file, mapper in self.visited_modules.items():
-            file_type = re.search(rf"^transformers\.models\.\w+\.({self.match_patterns})_.*", file).group(1)
+            file_type = re.search(rf"^mindway\.transformers\.models\.\w+\.({self.match_patterns})_.*", file).group(1)
             self.imported_objects_per_file[file_type].update(mapper.objects_imported_from_modeling)
 
     def merge_model_specific_imports(self, visited_modules):
