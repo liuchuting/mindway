@@ -548,7 +548,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     text_len = ed - st
 
                     st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
-                    llm_pos_ids_list.append(ops.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
+                    llm_pos_ids_list.append(mint.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
 
                     range_tensor = mint.arange(llm_grid_t).view(-1, 1)
                     expanded_range = range_tensor.broadcast_to((-1, llm_grid_h * llm_grid_w))
@@ -566,7 +566,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                 if st < len(input_tokens):
                     st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                     text_len = len(input_tokens) - st
-                    llm_pos_ids_list.append(ops.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
+                    llm_pos_ids_list.append(mint.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
 
                 llm_positions = mint.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
                 position_ids[..., i, attention_mask[i] == 1] = llm_positions.to(ms.int32)
@@ -582,7 +582,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                 mrope_position_deltas = max_position_ids + 1 - attention_mask.shape[-1]
             else:
                 position_ids = (
-                    ops.arange(input_ids.shape[1])
+                    mint.arange(input_ids.shape[1])
                     .view(1, 1, -1)
                     .broadcast_to((3, input_ids.shape[0], -1))
                 )
@@ -720,7 +720,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     if cache_position is not None
                     else 0
                 )
-                position_ids = ops.arange(seq_length)
+                position_ids = mint.arange(seq_length)
                 position_ids = position_ids.view(1, -1).broadcast_to((batch_size, -1))
                 if cache_position is not None:  # otherwise `deltas` is an int `0`
                     delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=0)
