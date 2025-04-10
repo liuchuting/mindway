@@ -286,7 +286,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
         pos_ids = []
         for t, h, w in grid_thw:
             t, h, w = t.item(), h.item(), w.item()
-            hpos_ids = ops.arange(h).unsqueeze(1).broadcast_to((-1, w))
+            hpos_ids = mint.arange(h).unsqueeze(1).broadcast_to((-1, w))
             hpos_ids = hpos_ids.reshape(
                 h // self.spatial_merge_size,
                 self.spatial_merge_size,
@@ -296,7 +296,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
             hpos_ids = hpos_ids.permute(0, 2, 1, 3)
             hpos_ids = hpos_ids.flatten()
 
-            wpos_ids = ops.arange(w).unsqueeze(0).broadcast_to((h, -1))
+            wpos_ids = mint.arange(w).unsqueeze(0).broadcast_to((h, -1))
             wpos_ids = wpos_ids.reshape(
                 h // self.spatial_merge_size,
                 self.spatial_merge_size,
@@ -324,7 +324,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
                 grid_h // self.spatial_merge_size,
                 grid_w // self.spatial_merge_size,
             )
-            index = ops.arange(grid_t * llm_grid_h * llm_grid_w).reshape(grid_t, llm_grid_h, llm_grid_w)
+            index = mint.arange(grid_t * llm_grid_h * llm_grid_w).reshape(grid_t, llm_grid_h, llm_grid_w)
             pad_h = vit_merger_window_size - llm_grid_h % vit_merger_window_size
             pad_w = vit_merger_window_size - llm_grid_w % vit_merger_window_size
             num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size
@@ -494,17 +494,12 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
             total_input_ids = input_ids
             if attention_mask is None:
                 attention_mask = mint.ones_like(total_input_ids)
-            position_ids = mint.ones(
-                3,
-                input_ids.shape[0],
-                input_ids.shape[1],
-                dtype=input_ids.dtype,
-            )
+            position_ids = mint.ones((3, input_ids.shape[0], input_ids.shape[1]), dtype=input_ids.dtype)
             image_index, video_index = 0, 0
             for i, input_ids in enumerate(total_input_ids):
                 input_ids = input_ids[attention_mask[i] == 1]
                 image_nums, video_nums = 0, 0
-                vision_start_indices = mint.argwhere(input_ids == vision_start_token_id).squeeze(1)
+                vision_start_indices = ops.argwhere(input_ids == vision_start_token_id).squeeze(1)
                 vision_tokens = input_ids[vision_start_indices + 1]
                 image_nums = (vision_tokens == image_token_id).sum()
                 video_nums = (vision_tokens == video_token_id).sum()
@@ -555,7 +550,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                     llm_pos_ids_list.append(ops.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
 
-                    range_tensor = ops.arange(llm_grid_t).view(-1, 1)
+                    range_tensor = mint.arange(llm_grid_t).view(-1, 1)
                     expanded_range = range_tensor.broadcast_to((-1, llm_grid_h * llm_grid_w))
 
                     time_tensor = expanded_range * second_per_grid_t * self.config.vision_config.tokens_per_second
@@ -563,8 +558,8 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     time_tensor_long = time_tensor.long()
                     t_index = time_tensor_long.flatten()
 
-                    h_index = ops.arange(llm_grid_h).view(1, -1, 1).broadcast_to((llm_grid_t, -1, llm_grid_w)).flatten()
-                    w_index = ops.arange(llm_grid_w).view(1, 1, -1).broadcast_to((llm_grid_t, llm_grid_h, -1)).flatten()
+                    h_index = mint.arange(llm_grid_h).view(1, -1, 1).broadcast_to((llm_grid_t, -1, llm_grid_w)).flatten()
+                    w_index = mint.arange(llm_grid_w).view(1, 1, -1).broadcast_to((llm_grid_t, llm_grid_h, -1)).flatten()
                     llm_pos_ids_list.append(mint.stack([t_index, h_index, w_index]) + text_len + st_idx)
                     st = ed + llm_grid_t * llm_grid_h * llm_grid_w
 
@@ -574,7 +569,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     llm_pos_ids_list.append(ops.arange(text_len).view(1, -1).broadcast_to((3, -1)) + st_idx)
 
                 llm_positions = mint.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
-                position_ids[..., i, attention_mask[i] == 1] = llm_positions
+                position_ids[..., i, attention_mask[i] == 1] = llm_positions.to(ms.int32)
                 mrope_position_deltas.append(llm_positions.max() + 1 - len(total_input_ids[i]))
             mrope_position_deltas = ms.Tensor(mrope_position_deltas).unsqueeze(1)
             return position_ids, mrope_position_deltas
@@ -666,7 +661,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
             if pixel_values is not None:
-                pixel_values = pixel_values.type(self.visual.dtype)
+                pixel_values = pixel_values.to(self.visual.dtype)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
                 n_image_features = image_embeds.shape[0]
@@ -684,7 +679,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                 inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
 
             if pixel_values_videos is not None:
-                pixel_values_videos = pixel_values_videos.type(self.visual.dtype)
+                pixel_values_videos = pixel_values_videos.to(self.visual.dtype)
                 video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
                 n_video_tokens = (input_ids == self.config.video_token_id).sum().item()
                 n_video_features = video_embeds.shape[0]

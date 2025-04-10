@@ -23,8 +23,7 @@ import math
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
-import numpy as np
-from transformers.models.qwen2_vl import Qwen2VLConfig
+from transformers.models.qwen2_vl.configuration_qwen2_vl import Qwen2VLConfig
 from transformers.utils import (
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
@@ -58,9 +57,8 @@ except ImportError:
 from mindway.transformers.utils import is_flash_attn_2_available
 from mindway.utils.version_control import check_valid_flash_attention
 
-FLASH_IS_AVAILABLE = is_flash_attn_2_available and check_valid_flash_attention()
 logger = logging.get_logger(__name__)
-if FLASH_IS_AVAILABLE:
+if is_flash_attn_2_available and check_valid_flash_attention():
     from mindway.models.modules.flash_attention import MSFlashAttention
 
 _CONFIG_FOR_DOC = "Qwen2VLConfig"
