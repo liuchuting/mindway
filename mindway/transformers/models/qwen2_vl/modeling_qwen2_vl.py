@@ -23,7 +23,6 @@ import math
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
-from transformers.models.qwen2_vl.configuration_qwen2_vl import Qwen2VLConfig
 from transformers.utils import (
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
@@ -48,6 +47,7 @@ from mindway.transformers.cache_utils import (  # TODO: SlidingWindowCache
 from mindway.transformers.modeling_attn_mask_utils import _MIN_FP16, dtype_to_min
 from mindway.transformers.modeling_outputs import BaseModelOutputWithPast, ModelOutput
 from mindway.transformers.modeling_utils import MSPreTrainedModel
+from .configuration_qwen2_vl import Qwen2VLConfig
 
 try:
     from transformers.models.qwen2_vl import Qwen2VLVisionConfig  # transformers >= 4.48.0
