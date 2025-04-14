@@ -2052,6 +2052,107 @@ class GenerationMixin:
             return sequences
 
 
+    def _prepare_cache_for_generation(
+        self,
+        generation_config: GenerationConfig,
+        model_kwargs: Dict,
+        assistant_model: "MSPreTrainedModel",
+        batch_size: int,
+        max_cache_length: int,
+    ) -> bool:
+        """
+        Prepares the cache for generation (if applicable), given `generate`'s parameterization. If a cache is
+        instantiated, writes it to `model_kwargs`, under the name expected by the model.
+        """
+
+        cache_name = "past_key_values" if "mamba" not in self.__class__.__name__.lower() else "cache_params"
+        requires_cross_attention_cache = (
+            self.config.is_encoder_decoder or model_kwargs.get("encoder_outputs") is not None
+        )
+
+        # Quick escape route 1: if the user specifies a cache, we only need to:
+        # a) check for conflicting `generate` arguments
+        # b) convert to the new cache format (if the user passes a legacy cache and model supports it)
+        user_defined_cache = model_kwargs.get(cache_name)
+        if user_defined_cache is not None:
+            if generation_config.cache_implementation is not None:
+                raise ValueError(
+                    f"Passing both `cache_implementation` (used to initialize certain caches) and `{cache_name}` (a "
+                    "Cache object) is unsupported. Please use only one of the two."
+                )
+            if isinstance(user_defined_cache, tuple) and self._supports_default_dynamic_cache():
+                model_kwargs[cache_name] = (
+                    DynamicCache.from_legacy_cache(user_defined_cache)
+                    if not requires_cross_attention_cache
+                    else EncoderDecoderCache.from_legacy_cache(user_defined_cache)
+                )
+            return
+
+        # Quick escape route 2: if the user specifies no cache is to be used. (conflicting arguments are handled in
+        # `generation_config.validate()`)
+        if generation_config.use_cache is False:
+            return
+
+        # Quick escape route 3: model that only supports legacy caches = nothing to prepare
+        if not self._supports_default_dynamic_cache():
+            if generation_config.cache_implementation is not None:
+                warnings.warn(
+                    "This model does not support `Cache` instances, it only supports the legacy cache format (tuple "
+                    f"of tuples). `cache_implementation` (set to {generation_config.cache_implementation}) will be "
+                    "ignored.",
+                    UserWarning,
+                )
+            return
+
+        # Otherwise we NEED to prepare a cache, based on `generation_config.cache_implementation`
+
+        # TODO(joao): support static caches in assisted generation. assisted generation needs to roll back caches,
+        # which is only supported in dynamic caches atm
+        if assistant_model is not None and generation_config.cache_implementation is not None:
+            logger.warning_once(
+                "An assistant model is provided, using a dynamic cache instead of a cache of type="
+                f"'{generation_config.cache_implementation}'."
+            )
+            generation_config.cache_implementation = None
+
+        if generation_config.cache_implementation is not None:
+            if generation_config.cache_implementation in NEED_SETUP_CACHE_CLASSES_MAPPING:
+                if generation_config.cache_implementation == "static" and not self._supports_static_cache:
+                    raise ValueError(
+                        "This model does not support `cache_implementation='static'`. Please check the following "
+                        "issue: https://github.com/huggingface/transformers/issues/28981"
+                    )
+                model_kwargs[cache_name] = self._get_cache(
+                    generation_config.cache_implementation,
+                    getattr(generation_config, "num_beams", 1) * batch_size,
+                    generation_config.max_length,
+                )
+            elif generation_config.cache_implementation == "quantized":
+                if not self._supports_quantized_cache:
+                    raise ValueError(
+                        "This model does not support the quantized cache. If you want your model to support quantized "
+                        "cache, please open an issue and tag @zucchini-nlp."
+                    )
+
+                raise NotImplementedError("Not support Quantized Cache")
+            elif generation_config.cache_implementation == "offloaded":
+                raise ValueError(
+                    "This model does not support the offloaded cache. If you want your model to support offloaded "
+                    "cache, please open an issue."
+                )
+            elif generation_config.cache_implementation == "dynamic":
+                model_kwargs[cache_name] = DynamicCache()
+
+        # Use DynamicCache() instance by default. This will avoid back and forth from legacy format that
+        # keeps copying the cache thus using much more memory
+        else:
+            model_kwargs[cache_name] = (
+                DynamicCache()
+                if not requires_cross_attention_cache
+                else EncoderDecoderCache(DynamicCache(), DynamicCache())
+            )
+
+
     def generate(
         self,
         inputs: Optional[ms.Tensor] = None,
@@ -2243,92 +2344,16 @@ class GenerationMixin:
         # - `model_kwargs` may be updated in place with a cache as defined by the parameters in `generation_config`.
         # - different models have a different cache name expected by the model (default = "past_key_values")
         # - `max_length`, prepared above, is used to determine the maximum cache length
-        use_dynamic_cache_by_default = False
-        if "mamba" in self.__class__.__name__.lower():
-            cache_name = "cache_params"  # TODO: support MambaCache
-        else:
-            cache_name = "past_key_values"
-        if generation_config.cache_implementation is not None and model_kwargs.get(cache_name) is not None:
-            raise ValueError(
-                "Passing both `cache_implementation` (used to initialize certain caches) and `past_key_values` (a "
-                "Cache object) is unsupported. Please use only one of the two."
-            )
-        elif generation_config.cache_implementation is not None:
-            if generation_config.cache_implementation in NEED_SETUP_CACHE_CLASSES_MAPPING:
-                if generation_config.cache_implementation == "static" and not self._supports_static_cache:
-                    raise ValueError(
-                        "This model does not support `cache_implementation='static'`. Please check the following "
-                        "issue: https://github.com/huggingface/transformers/issues/28981"
-                    )
-                model_kwargs[cache_name] = self._get_cache(
-                    generation_config.cache_implementation,
-                    getattr(generation_config, "num_beams", 1) * batch_size,
-                    generation_config.max_length,
-                )
-            elif generation_config.cache_implementation == "quantized":
-                if not self._supports_quantized_cache:
-                    raise ValueError(
-                        "This model does not support the quantized cache. If you want your model to support quantized "
-                        "cache, please open an issue."
-                    )
-
-                raise NotImplementedError("Not support Quantized Cache")
-        # Use DynamicCache instance by default. This will avoid back and forth from legacy format that
-        # keeps copying the cache thus using much more memory
-        elif (
-            generation_config.cache_implementation is None
-            and self._supports_default_dynamic_cache()
-            and model_kwargs.get("use_cache", False)
+        max_cache_length = generation_config.max_length - 1
+        if (
+            inputs_tensor.shape[1] != input_ids_length
+            and model_input_name == "inputs_embeds"
+            and not self.config.is_encoder_decoder
         ):
-            past = model_kwargs.get(cache_name, None)
-
-            requires_cross_attention_cache = (
-                self.config.is_encoder_decoder or model_kwargs.get("encoder_outputs") is not None
-            )
-            if past is None:
-                model_kwargs[cache_name] = (
-                    DynamicCache()
-                    if not requires_cross_attention_cache
-                    else EncoderDecoderCache(DynamicCache(), DynamicCache())
-                )
-                use_dynamic_cache_by_default = True
-            elif isinstance(past, tuple):
-                model_kwargs[cache_name] = (
-                    DynamicCache.from_legacy_cache(past)
-                    if not requires_cross_attention_cache
-                    else EncoderDecoderCache.from_legacy_cache(past)
-                )
-                use_dynamic_cache_by_default = True
-
-        # Use static tuple cache by default.
-        elif (
-            generation_config.cache_implementation is None
-            and not self._supports_default_dynamic_cache()
-            and model_kwargs.get("use_cache", False)
-        ):
-            past = model_kwargs.get(cache_name, None)
-            max_batch_size, max_cache_len, cache_dtype = (
-                getattr(generation_config, "num_beams", 1) * batch_size,
-                generation_config.max_length,
-                self.dtype,
-            )
-            need_new_cache = (
-                past is None
-                or (not isinstance(past, tuple))
-                or (not isinstance(past[0][0], ms.Tensor))
-                or past[0][0].shape[0] != max_batch_size
-                or past[0][0].shape[2] < max_cache_len
-            )
-
-            if need_new_cache:
-                model_kwargs[cache_name] = StaticCache(
-                    config=self.config,
-                    max_batch_size=max_batch_size,
-                    max_cache_len=max_cache_len,
-                    dtype=cache_dtype,
-                )
-            else:
-                model_kwargs[cache_name] = reset(past)
+            max_cache_length += inputs_tensor.shape[1]
+        self._prepare_cache_for_generation(
+            generation_config, model_kwargs, assistant_model, batch_size, max_cache_length
+        )
 
         self._validate_generated_length(generation_config, input_ids_length, has_default_max_length)
 
