@@ -1613,7 +1613,9 @@ BIGBIRD_PEGASUS_GENERATION_EXAMPLE = r"""
     Summarization example:
 
     ```python
-    >>> from transformers import AutoTokenizer, BigBirdPegasusForConditionalGeneration
+    >>> import mindspore as ms
+    >>> from transformers import AutoTokenizer
+    >>> from mindway import BigBirdPegasusForConditionalGeneration
 
     >>> model = BigBirdPegasusForConditionalGeneration.from_pretrained("google/bigbird-pegasus-large-arxiv")
     >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-pegasus-large-arxiv")
@@ -1626,10 +1628,10 @@ BIGBIRD_PEGASUS_GENERATION_EXAMPLE = r"""
     ...     "Experiments on two machine translation tasks show these models to be superior in quality "
     ...     "while being more parallelizable and requiring significantly less time to train."
     ... )
-    >>> inputs = tokenizer([ARTICLE_TO_SUMMARIZE], max_length=4096, return_tensors="pt", truncation=True)
+    >>> inputs = tokenizer([ARTICLE_TO_SUMMARIZE], max_length=4096, return_tensors="np", truncation=True)
 
     >>> # Generate Summary
-    >>> summary_ids = model.generate(inputs["input_ids"], num_beams=4, max_length=15)
+    >>> summary_ids = model.generate(ms.tensor(inputs["input_ids"]), num_beams=4, max_length=15)
     >>> tokenizer.batch_decode(summary_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
     'dominant sequence models are based on recurrent or convolutional neural networks .'
     ```
@@ -2968,6 +2970,7 @@ class BigBirdPegasusForCausalLM(BigBirdPegasusPreTrainedModel, GenerationMixin):
         Example:
 
         ```python
+        >>> import mindspore as ms
         >>> from transformers import AutoTokenizer
         >>> from mindway import BigBirdPegasusForCausalLM
 
@@ -2976,7 +2979,9 @@ class BigBirdPegasusForCausalLM(BigBirdPegasusPreTrainedModel, GenerationMixin):
         ...     "google/bigbird-pegasus-large-arxiv", add_cross_attention=False
         ... )
         >>> assert model.config.is_decoder, f"{model.__class__} has to be configured as a decoder."
-        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="pt")
+        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="np")
+        >>> for k,v in inputs.items():
+        >>>     inputs[k] = ms.Tensor(v)
         >>> outputs = model(**inputs)
 
         >>> logits = outputs.logits
