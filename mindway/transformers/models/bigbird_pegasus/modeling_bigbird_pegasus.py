@@ -1138,7 +1138,7 @@ class BigBirdPegasusEncoderAttention(nn.Cell):
         self.attention_type = value
 
         if not self.training:
-            self.self.eval()
+            self.self.set_train(False)
 
     def construct(
         self,
