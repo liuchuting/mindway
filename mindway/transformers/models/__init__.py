@@ -21,4 +21,6 @@ from . import (
     xlm_roberta,
     myt5,
     switch_transformers,
+    big_bird,
+    bigbird_pegasus
 )

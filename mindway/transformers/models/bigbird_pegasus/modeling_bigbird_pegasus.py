@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch BigBirdPegasus model."""
+"""MindSpore BigBirdPegasus model."""
 
 import copy
 import math
@@ -43,6 +43,7 @@ from ...utils import (
     logging,
     # replace_return_docstrings,
 )
+from ...mindspore_adapter import dtype_to_max, dtype_to_min
 from .configuration_bigbird_pegasus import BigBirdPegasusConfig
 
 
@@ -80,8 +81,8 @@ class BigBirdPegasusLearnedPositionalEmbedding(mint.nn.Embedding):
     def construct(self, input_ids_shape, past_key_values_length: int = 0):
         """`input_ids_shape` is expected to be [bsz x seqlen]."""
         bsz, seq_len = input_ids_shape[:2]
-        positions = torch.arange(
-            past_key_values_length, past_key_values_length + seq_len, dtype=torch.long, device=self.weight.device
+        positions = mint.arange(
+            past_key_values_length, past_key_values_length + seq_len, dtype=ms.int64
         )
         return super().forward(positions)
 
@@ -155,8 +156,8 @@ class BigBirdPegasusSelfAttention(nn.Cell):
         elif past_key_value is not None:
             key_layer = self.transpose_for_scores(self.key(hidden_states))
             value_layer = self.transpose_for_scores(self.value(hidden_states))
-            key_layer = torch.cat([past_key_value[0], key_layer], dim=2)
-            value_layer = torch.cat([past_key_value[1], value_layer], dim=2)
+            key_layer = mint.cat([past_key_value[0], key_layer], dim=2)
+            value_layer = mint.cat([past_key_value[1], value_layer], dim=2)
         else:
             key_layer = self.transpose_for_scores(self.key(hidden_states))
             value_layer = self.transpose_for_scores(self.value(hidden_states))
@@ -174,7 +175,7 @@ class BigBirdPegasusSelfAttention(nn.Cell):
             past_key_value = (key_layer, value_layer)
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_scores = mint.matmul(query_layer, key_layer.transpose(-1, -2))
 
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None:
@@ -192,7 +193,7 @@ class BigBirdPegasusSelfAttention(nn.Cell):
         if head_mask is not None:
             attention_probs = attention_probs * head_mask
 
-        context_layer = torch.matmul(attention_probs, value_layer)
+        context_layer = mint.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
@@ -290,18 +291,18 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         return outputs
 
     @staticmethod
-    def torch_bmm_nd(inp_1, inp_2, ndim=None):
+    def minsdpore_bmm_nd(inp_1, inp_2, ndim=None):
         """Fast nd matrix multiplication"""
-        # faster replacement of torch.einsum ("bhqk,bhkd->bhqd")
-        return torch.bmm(inp_1.reshape((-1,) + inp_1.shape[-2:]), inp_2.reshape((-1,) + inp_2.shape[-2:])).view(
+        # faster replacement of mint.einsum ("bhqk,bhkd->bhqd")
+        return mint.bmm(inp_1.reshape((-1,) + inp_1.shape[-2:]), inp_2.reshape((-1,) + inp_2.shape[-2:])).view(
             inp_1.shape[: ndim - 2] + (inp_1.shape[ndim - 2], inp_2.shape[ndim - 1])
         )
 
     @staticmethod
-    def torch_bmm_nd_transpose(inp_1, inp_2, ndim=None):
+    def minsdpore_bmm_nd_transpose(inp_1, inp_2, ndim=None):
         """Fast nd matrix multiplication with transpose"""
-        # faster replacement of torch.einsum (bhqd,bhkd->bhqk)
-        return torch.bmm(
+        # faster replacement of mint.einsum (bhqd,bhkd->bhqk)
+        return mint.bmm(
             inp_1.reshape((-1,) + inp_1.shape[-2:]), inp_2.reshape((-1,) + inp_2.shape[-2:]).transpose(1, 2)
         ).view(inp_1.shape[: ndim - 2] + (inp_1.shape[ndim - 2], inp_2.shape[ndim - 2]))
 
@@ -383,9 +384,9 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             )
 
         rand_attn = np.stack(rand_attn, axis=0)
-        rand_attn = ms.Tensor(rand_attn, device=query_layer.device, dtype=torch.long)
-        rand_attn.unsqueeze_(0)
-        rand_attn = torch.cat([rand_attn for _ in range(batch_size)], dim=0)
+        rand_attn = ms.Tensor(rand_attn, dtype=ms.int64)
+        rand_attn.unsqueeze(0)
+        rand_attn = mint.cat([rand_attn for _ in range(batch_size)], dim=0)
 
         rand_mask = self._create_rand_mask_from_inputs(
             from_blocked_mask, to_blocked_mask, rand_attn, n_heads, n_rand_blocks, bsz, from_seq_len, from_block_size
@@ -396,11 +397,11 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         blocked_value_matrix = value_layer.view(bsz, n_heads, to_seq_len // to_block_size, to_block_size, -1)
 
         # preparing block for randn attn
-        gathered_key = self.torch_gather_b2(blocked_key_matrix, rand_attn)
+        gathered_key = self.mindspore_gather_b2(blocked_key_matrix, rand_attn)
         gathered_key = gathered_key.view(
             bsz, n_heads, to_seq_len // to_block_size - 2, n_rand_blocks * to_block_size, -1
         )  # [bsz, n_heads, to_seq_len//to_block_size-2, n_rand_blocks, to_block_size, -1]
-        gathered_value = self.torch_gather_b2(blocked_value_matrix, rand_attn)
+        gathered_value = self.mindspore_gather_b2(blocked_value_matrix, rand_attn)
         gathered_value = gathered_value.view(
             bsz, n_heads, to_seq_len // to_block_size - 2, n_rand_blocks * to_block_size, -1
         )  # [bsz, n_heads, to_seq_len//to_block_size-2, n_rand_blocks, to_block_size, -1]
@@ -410,7 +411,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         # q[0] x (k[0], k[1], k[2], k[3], k[4] .... )
 
         # [bsz, n_heads, from_block_size, -1] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, to_seq_len]
-        first_product = self.torch_bmm_nd_transpose(blocked_query_matrix[:, :, 0], key_layer, ndim=4)
+        first_product = self.minsdpore_bmm_nd_transpose(blocked_query_matrix[:, :, 0], key_layer, ndim=4)
 
         first_product = first_product * rsqrt_d
         first_product += (1.0 - to_mask) * attn_mask_penalty
@@ -419,8 +420,8 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         )  # [bsz, n_heads, from_block_size, to_seq_len]
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
-        first_context_layer = self.torch_bmm_nd(first_attn_weights, value_layer, ndim=4)
-        first_context_layer.unsqueeze_(2)
+        first_context_layer = self.minsdpore_bmm_nd(first_attn_weights, value_layer, ndim=4)
+        first_context_layer.unsqueeze(2)
 
         # 2nd PART
         # 2nd block attention scores
@@ -428,7 +429,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         # sliding key blocks -> 2nd, 3rd blocks
         # global key blocks -> 1st block
 
-        second_key_mat = torch.cat(
+        second_key_mat = mint.cat(
             [
                 blocked_key_matrix[:, :, 0],
                 blocked_key_matrix[:, :, 1],
@@ -438,7 +439,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             ],
             dim=2,
         )  # [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1]
-        second_value_mat = torch.cat(
+        second_value_mat = mint.cat(
             [
                 blocked_value_matrix[:, :, 0],
                 blocked_value_matrix[:, :, 1],
@@ -450,8 +451,8 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         )  # [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1]
 
         # [bsz, n_heads, from_block_size, -1] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size]
-        second_product = self.torch_bmm_nd_transpose(blocked_query_matrix[:, :, 1], second_key_mat, ndim=4)
-        second_seq_pad = torch.cat(
+        second_product = self.minsdpore_bmm_nd_transpose(blocked_query_matrix[:, :, 1], second_key_mat, ndim=4)
+        second_seq_pad = mint.cat(
             [
                 to_mask[:, :, :, : 3 * to_block_size],
                 to_mask[:, :, :, -to_block_size:],
@@ -459,7 +460,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             ],
             dim=3,
         )
-        second_rand_pad = torch.cat(
+        second_rand_pad = mint.cat(
             [
                 rand_mask.new_ones([bsz, n_heads, from_block_size, 4 * to_block_size]),
                 rand_mask[:, :, 0],
@@ -467,15 +468,15 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             dim=3,
         )
         second_product = second_product * rsqrt_d
-        second_product += (1.0 - torch.minimum(second_seq_pad, second_rand_pad)) * attn_mask_penalty
+        second_product += (1.0 - mint.minimum(second_seq_pad, second_rand_pad)) * attn_mask_penalty
         second_attn_weights = mint.nn.functional.softmax(
             second_product, dim=-1
         )  # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size]
 
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
-        second_context_layer = self.torch_bmm_nd(second_attn_weights, second_value_mat, ndim=4)
+        second_context_layer = self.minsdpore_bmm_nd(second_attn_weights, second_value_mat, ndim=4)
 
-        second_context_layer.unsqueeze_(2)
+        second_context_layer.unsqueeze(2)
 
         # 3rd PART
         # Middle blocks attention scores
@@ -484,10 +485,10 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         # random keys are generated by taking random indices as per `rand_attn`
         # global keys -> 1st & last block
 
-        exp_blocked_key_matrix = torch.cat(
+        exp_blocked_key_matrix = mint.cat(
             [blocked_key_matrix[:, :, 1:-3], blocked_key_matrix[:, :, 2:-2], blocked_key_matrix[:, :, 3:-1]], dim=3
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, 3*to_block_size, -1]
-        exp_blocked_value_matrix = torch.cat(
+        exp_blocked_value_matrix = mint.cat(
             [blocked_value_matrix[:, :, 1:-3], blocked_value_matrix[:, :, 2:-2], blocked_value_matrix[:, :, 3:-1]],
             dim=3,
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, 3*to_block_size, -1]
@@ -495,24 +496,24 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
 
         # sliding attention scores for q[-2:2]
         # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1] x [b, n_heads, from_seq_len//from_block_size-4, 3*to_block_size, -1]
-        inner_band_product = self.torch_bmm_nd_transpose(middle_query_matrix, exp_blocked_key_matrix, ndim=5)
+        inner_band_product = self.minsdpore_bmm_nd_transpose(middle_query_matrix, exp_blocked_key_matrix, ndim=5)
         #     ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, 3*to_block_size]
         inner_band_product = inner_band_product * rsqrt_d
 
         # randn attention scores for q[-2:2]
         # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1] x [bsz, n_heads, from_seq_len//from_block_size-4, n_rand_blocks*to_block_size, -1]
-        rand_band_product = self.torch_bmm_nd_transpose(middle_query_matrix, gathered_key[:, :, 1:-1], ndim=5)
+        rand_band_product = self.minsdpore_bmm_nd_transpose(middle_query_matrix, gathered_key[:, :, 1:-1], ndim=5)
         #     ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, n_rand_blocks*to_block_size]
         rand_band_product = rand_band_product * rsqrt_d
 
         # Including 1st block (since it's global)
-        first_band_product = torch.einsum(
+        first_band_product = mint.einsum(
             "bhlqd,bhkd->bhlqk", middle_query_matrix, blocked_key_matrix[:, :, 0]
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1] x [bsz, n_heads, to_block_size, -1] ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, to_block_size]
         first_band_product = first_band_product * rsqrt_d
 
         # Including last block (since it's global)
-        last_band_product = torch.einsum(
+        last_band_product = mint.einsum(
             "bhlqd,bhkd->bhlqk", middle_query_matrix, blocked_key_matrix[:, :, -1]
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1] x [bsz, n_heads, to_block_size, -1] ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, to_block_size]
         last_band_product = last_band_product * rsqrt_d
@@ -524,7 +525,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         rand_band_product += (1.0 - rand_mask[:, :, 1:-1]) * attn_mask_penalty
 
         # completing attention scores matrix for all q[-2:2]
-        band_product = torch.cat(
+        band_product = mint.cat(
             [first_band_product, inner_band_product, rand_band_product, last_band_product], dim=-1
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, (5+n_rand_blocks)*to_block_size]
 
@@ -535,23 +536,23 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
 
         # contribution of sliding keys
         # [bsz, n_heads, m//from_block_size-4, from_block_size, 3*to_block_size] x [bsz, n_heads, from_seq_len//from_block_size-4, 3*to_block_size, -1]
-        context_layer = self.torch_bmm_nd(
+        context_layer = self.minsdpore_bmm_nd(
             attn_weights[:, :, :, :, to_block_size : 4 * to_block_size], exp_blocked_value_matrix, ndim=5
         )
         #     ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1]
 
         # adding contribution of random keys
         # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, n_rand_blocks*to_block_size] x [bsz, n_heads, from_seq_len//from_block_size-4, n_rand_blocks*to_block_size, -1]
-        context_layer += self.torch_bmm_nd(
+        context_layer += self.minsdpore_bmm_nd(
             attn_weights[:, :, :, :, 4 * to_block_size : -to_block_size], gathered_value[:, :, 1:-1], ndim=5
         )
         #     ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1]
 
         # adding contribution of global keys
-        context_layer += torch.einsum(
+        context_layer += mint.einsum(
             "bhlqk,bhkd->bhlqd", attn_weights[:, :, :, :, :to_block_size], blocked_value_matrix[:, :, 0]
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, to_block_size] x [bsz, n_heads, to_block_size, -1] ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1]
-        context_layer += torch.einsum(
+        context_layer += mint.einsum(
             "bhlqk,bhkd->bhlqd", attn_weights[:, :, :, :, -to_block_size:], blocked_value_matrix[:, :, -1]
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, to_block_size] x [bsz, n_heads, to_block_size, -1] ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1]
 
@@ -562,7 +563,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         # global key block -> 1st block
         # random key block -> based on indices stored in `randn_attn`
 
-        second_last_key_mat = torch.cat(
+        second_last_key_mat = mint.cat(
             [
                 blocked_key_matrix[:, :, 0],
                 blocked_key_matrix[:, :, -3],
@@ -572,7 +573,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             ],
             dim=2,
         )  # [bsz, n_heads, (4+n_random_blocks)*to_block_size, -1]
-        second_last_value_mat = torch.cat(
+        second_last_value_mat = mint.cat(
             [
                 blocked_value_matrix[:, :, 0],
                 blocked_value_matrix[:, :, -3],
@@ -584,8 +585,8 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         )  # [bsz, n_heads, (4+r)*to_block_size, -1]
 
         # [bsz, n_heads, from_block_size, -1] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size]
-        second_last_product = self.torch_bmm_nd_transpose(blocked_query_matrix[:, :, -2], second_last_key_mat, ndim=4)
-        second_last_seq_pad = torch.cat(
+        second_last_product = self.minsdpore_bmm_nd_transpose(blocked_query_matrix[:, :, -2], second_last_key_mat, ndim=4)
+        second_last_seq_pad = mint.cat(
             [
                 to_mask[:, :, :, :to_block_size],
                 to_mask[:, :, :, -3 * to_block_size :],
@@ -593,7 +594,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             ],
             dim=3,
         )
-        second_last_rand_pad = torch.cat(
+        second_last_rand_pad = mint.cat(
             [
                 rand_mask.new_ones([bsz, n_heads, from_block_size, 4 * to_block_size]),
                 rand_mask[:, :, -1],
@@ -601,42 +602,42 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             dim=3,
         )
         second_last_product = second_last_product * rsqrt_d
-        second_last_product += (1.0 - torch.minimum(second_last_seq_pad, second_last_rand_pad)) * attn_mask_penalty
+        second_last_product += (1.0 - mint.minimum(second_last_seq_pad, second_last_rand_pad)) * attn_mask_penalty
         second_last_attn_weights = mint.nn.functional.softmax(
             second_last_product, dim=-1
         )  # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size]
 
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
-        second_last_context_layer = self.torch_bmm_nd(second_last_attn_weights, second_last_value_mat, ndim=4)
-        second_last_context_layer.unsqueeze_(2)
+        second_last_context_layer = self.minsdpore_bmm_nd(second_last_attn_weights, second_last_value_mat, ndim=4)
+        second_last_context_layer.unsqueeze(2)
 
         # 5th PART
         # last block (global) attention scores
         # q[-1] x (k[0], k[1], k[2], k[3], .... )
 
         # [bsz, n_heads, from_block_size, -1] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, to_seq_len]
-        last_product = self.torch_bmm_nd_transpose(blocked_query_matrix[:, :, -1], key_layer, ndim=4)
+        last_product = self.minsdpore_bmm_nd_transpose(blocked_query_matrix[:, :, -1], key_layer, ndim=4)
         last_product = last_product * rsqrt_d
         last_product += (1.0 - to_mask) * attn_mask_penalty
         last_attn_weights = mint.nn.functional.softmax(last_product, dim=-1)  # [bsz, n_heads, from_block_size, n]
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
-        last_context_layer = self.torch_bmm_nd(last_attn_weights, value_layer, ndim=4)
-        last_context_layer.unsqueeze_(2)
+        last_context_layer = self.minsdpore_bmm_nd(last_attn_weights, value_layer, ndim=4)
+        last_context_layer.unsqueeze(2)
 
         # combining representations of all tokens
-        context_layer = torch.cat(
+        context_layer = mint.cat(
             [first_context_layer, second_context_layer, context_layer, second_last_context_layer, last_context_layer],
             dim=2,
         )
         context_layer = context_layer.view((bsz, n_heads, from_seq_len, -1)) * from_mask
-        context_layer = torch.transpose(context_layer, 1, 2)
+        context_layer = mint.transpose(context_layer, 1, 2)
 
         # this is just for visualizing; forward pass doesn't depend on following code
         if output_attentions:
             # TODO(PVP): need to verify if below code is correct
-            attention_probs = torch.zeros(
-                bsz, n_heads, from_seq_len, to_seq_len, dtype=torch.float, device=context_layer.device
+            attention_probs = mint.zeros(
+                bsz, n_heads, from_seq_len, to_seq_len, dtype=ms.float32
             )
 
             # 1st query block
@@ -748,7 +749,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         return context_layer, attention_probs
 
     @staticmethod
-    def torch_gather_b2(params, indices):
+    def mindspore_gather_b2(params, indices):
         # this operation is equivalent to tf.gather when batch_dims=2
 
         if params.shape[:2] != indices.shape[:2]:
@@ -759,8 +760,8 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         num_indices_to_gather = indices.shape[-2] * indices.shape[-1]
         num_indices_to_pick_from = params.shape[2]
 
-        shift = torch.arange(indices.shape[0] * indices.shape[1] * num_indices_to_gather, device=indices.device)
-        indices_shift = torch.div(shift, num_indices_to_gather, rounding_mode="floor") * num_indices_to_pick_from
+        shift = mint.arange(indices.shape[0] * indices.shape[1] * num_indices_to_gather)
+        indices_shift = mint.div(shift, num_indices_to_gather, rounding_mode="floor") * num_indices_to_pick_from
 
         flattened_indices = indices.view(-1) + indices_shift
         flattened_params = params.reshape(-1, params.shape[-2], params.shape[-1])
@@ -802,9 +803,9 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
             from_block_size, num_rand_blocks*to_block_size].
         """
         num_windows = from_seq_length // from_block_size - 2
-        rand_mask = torch.stack([p1[i1.flatten()] for p1, i1 in zip(to_blocked_mask, rand_attn)])
+        rand_mask = mint.stack([p1[i1.flatten()] for p1, i1 in zip(to_blocked_mask, rand_attn)])
         rand_mask = rand_mask.view(batch_size, num_attention_heads, num_windows, num_rand_blocks * from_block_size)
-        rand_mask = torch.einsum("blq,bhlk->bhlqk", from_blocked_mask[:, 1:-1], rand_mask)
+        rand_mask = mint.einsum("blq,bhlk->bhlqk", from_blocked_mask[:, 1:-1], rand_mask)
         return rand_mask
 
     @staticmethod
@@ -1250,8 +1251,8 @@ class BigBirdPegasusDecoderAttention(nn.Cell):
             # reuse k, v, self_attention
             key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
             value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
-            key_states = torch.cat([past_key_value[0], key_states], dim=2)
-            value_states = torch.cat([past_key_value[1], value_states], dim=2)
+            key_states = mint.cat([past_key_value[0], key_states], dim=2)
+            value_states = mint.cat([past_key_value[1], value_states], dim=2)
         else:
             # self_attention
             key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
@@ -1273,7 +1274,7 @@ class BigBirdPegasusDecoderAttention(nn.Cell):
         value_states = value_states.reshape(*proj_shape)
 
         src_len = key_states.shape[1]
-        attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
+        attn_weights = mint.bmm(query_states, key_states.transpose(1, 2))
 
         if attn_weights.shape != (bsz * self.num_heads, tgt_len, src_len):
             raise ValueError(
@@ -1312,7 +1313,7 @@ class BigBirdPegasusDecoderAttention(nn.Cell):
 
         attn_probs = mint.nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
 
-        attn_output = torch.bmm(attn_probs, value_states)
+        attn_output = mint.bmm(attn_probs, value_states)
 
         if attn_output.shape != (bsz * self.num_heads, tgt_len, self.head_dim):
             raise ValueError(
@@ -1394,11 +1395,11 @@ class BigBirdPegasusEncoderLayer(nn.Cell):
         hidden_states = mint.nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
 
-        if hidden_states.dtype == torch.float16 and (
-            torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()
+        if hidden_states.dtype == ms.float16 and (
+            mint.isinf(hidden_states).any() or mint.isnan(hidden_states).any()
         ):
-            clamp_value = torch.finfo(hidden_states.dtype).max - 1000
-            hidden_states = torch.clamp(hidden_states, min=-clamp_value, max=clamp_value)
+            clamp_value = dtype_to_max(hidden_states.dtype) - 1000
+            hidden_states = mint.clamp(hidden_states, min=-clamp_value, max=clamp_value)
 
         outputs = (hidden_states,)
 
@@ -1557,7 +1558,7 @@ class BigBirdPegasusClassificationHead(nn.Cell):
     def construct(self, hidden_states: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.dense(hidden_states)
-        hidden_states = torch.tanh(hidden_states)
+        hidden_states = mint.tanh(hidden_states)
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.out_proj(hidden_states)
         return hidden_states
@@ -1585,7 +1586,7 @@ class BigBirdPegasusPreTrainedModel(PreTrainedModel):
     @property
     def dummy_inputs(self):
         pad_token = self.config.pad_token_id
-        input_ids = ms.Tensor([[0, 6, 10, 4, 2], [0, 8, 12, 2, pad_token]], device=self.device)
+        input_ids = ms.Tensor([[0, 6, 10, 4, 2], [0, 8, 12, 2, pad_token]])
         dummy_inputs = {
             "attention_mask": input_ids.ne(pad_token),
             "input_ids": input_ids,
@@ -1597,8 +1598,8 @@ BIGBIRD_PEGASUS_START_DOCSTRING = r"""
     This model inherits from [`PreTrainedModel`]. Check the superclass documentation for the generic methods the
     library implements for all its model (such as downloading or saving, resizing the input embeddings etc.)
 
-    This model is also a PyTorch [torch.nn.Module](https://pytorch.org/docs/stable/nn.html#torch.nn.Module) subclass.
-    Use it as a regular PyTorch Module and refer to the PyTorch documentation for all matter related to general usage
+    This model is also a mindspore [mindspore.nn.Cell](https://www.mindspore.cn/docs/zh-CN/master/api_python/nn/mindspore.nn.Cell.html) subclass.
+    Use it as a regular MindSpore Cell and refer to the MindSpore documentation for all matter related to general usage
     and behavior.
 
     Parameters:
@@ -1846,7 +1847,7 @@ class BigBirdPegasusEncoder(BigBirdPegasusPreTrainedModel):
         hidden_states = mint.nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
 
         if attention_mask is None:
-            attention_mask = torch.ones(input_shape, device=hidden_states.device)
+            attention_mask = mint.ones(input_shape)
         attention_mask = attention_mask.long()
 
         # in order to use block_sparse attention, sequence_length has to be at least
@@ -1907,7 +1908,7 @@ class BigBirdPegasusEncoder(BigBirdPegasusPreTrainedModel):
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             to_drop = False
             if self.training:
-                dropout_probability = torch.rand([])
+                dropout_probability = mint.rand([])
                 if dropout_probability < self.layerdrop:  # skip the layer
                     to_drop = True
 
@@ -1998,11 +1999,11 @@ class BigBirdPegasusEncoder(BigBirdPegasusPreTrainedModel):
                 float Tensor of shape [batch_size, 1, from_seq_length//from_block_size-4, from_block_size,
                 3*to_block_size].
             """
-            exp_blocked_to_pad = torch.cat(
+            exp_blocked_to_pad = mint.cat(
                 [to_blocked_mask[:, 1:-3], to_blocked_mask[:, 2:-2], to_blocked_mask[:, 3:-1]], dim=2
             )
-            band_mask = torch.einsum("blq,blk->blqk", from_blocked_mask[:, 2:-2], exp_blocked_to_pad)
-            band_mask.unsqueeze_(1)
+            band_mask = mint.einsum("blq,blk->blqk", from_blocked_mask[:, 2:-2], exp_blocked_to_pad)
+            band_mask.unsqueeze(1)
             return band_mask
 
         blocked_encoder_mask = attention_mask.view(batch_size, seq_length // block_size, block_size)
@@ -2026,10 +2027,9 @@ class BigBirdPegasusEncoder(BigBirdPegasusPreTrainedModel):
                 f"`config.block_size`: {block_size}"
             )
             pad_id = self.config.pad_token_id
-            device = hidden_states.device
-            input_ids_padding = torch.ones((batch_size, padding_len), dtype=torch.long, device=device) * pad_id
+            input_ids_padding = mint.ones((batch_size, padding_len), dtype=ms.int64) * pad_id
             inputs_embeds_padding = self.embed_tokens(input_ids_padding)
-            hidden_states = torch.cat([hidden_states, inputs_embeds_padding], dim=-2)
+            hidden_states = mint.cat([hidden_states, inputs_embeds_padding], dim=-2)
 
             attention_mask = mint.nn.functional.pad(
                 attention_mask, (0, padding_len), value=0
@@ -2196,7 +2196,6 @@ class BigBirdPegasusDecoder(BigBirdPegasusPreTrainedModel):
 
         # embed positions
         positions = self.embed_positions(input_shape, past_key_values_length)
-        positions = positions.to(inputs_embeds.device)
 
         hidden_states = inputs_embeds + positions
 
@@ -2228,7 +2227,7 @@ class BigBirdPegasusDecoder(BigBirdPegasusPreTrainedModel):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
             if self.training:
-                dropout_probability = torch.rand([])
+                dropout_probability = mint.rand([])
                 if dropout_probability < self.layerdrop:
                     continue
 
@@ -2294,10 +2293,10 @@ class BigBirdPegasusDecoder(BigBirdPegasusPreTrainedModel):
         )
 
 
-@add_start_docstrings(
-    "The bare BigBirdPegasus Model outputting raw hidden-states without any specific head on top.",
-    BIGBIRD_PEGASUS_START_DOCSTRING,
-)
+# @add_start_docstrings(
+#     "The bare BigBirdPegasus Model outputting raw hidden-states without any specific head on top.",
+#     BIGBIRD_PEGASUS_START_DOCSTRING,
+# )
 class BigBirdPegasusModel(BigBirdPegasusPreTrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -2335,13 +2334,13 @@ class BigBirdPegasusModel(BigBirdPegasusPreTrainedModel):
     def get_decoder(self):
         return self.decoder
 
-    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    @add_code_sample_docstrings(
-        checkpoint=_CHECKPOINT_FOR_DOC,
-        output_type=Seq2SeqModelOutput,
-        config_class=_CONFIG_FOR_DOC,
-        expected_output=_EXPECTED_OUTPUT_SHAPE,
-    )
+    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    # @add_code_sample_docstrings(
+    #     checkpoint=_CHECKPOINT_FOR_DOC,
+    #     output_type=Seq2SeqModelOutput,
+    #     config_class=_CONFIG_FOR_DOC,
+    #     expected_output=_EXPECTED_OUTPUT_SHAPE,
+    # )
     # Copied from transformers.models.bart.modeling_bart.BartModel.forward with Bart->BigBirdPegasus
     def construct(
         self,
@@ -2431,10 +2430,10 @@ class BigBirdPegasusModel(BigBirdPegasusPreTrainedModel):
         )
 
 
-@add_start_docstrings(
-    "The BigBirdPegasus Model with a language modeling head. Can be used for summarization.",
-    BIGBIRD_PEGASUS_START_DOCSTRING,
-)
+# @add_start_docstrings(
+#     "The BigBirdPegasus Model with a language modeling head. Can be used for summarization.",
+#     BIGBIRD_PEGASUS_START_DOCSTRING,
+# )
 # Copied from transformers.models.bart.modeling_bart.BartForConditionalGeneration with Bart->BigBirdPegasus, BART->BIGBIRD_PEGASUS
 class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, GenerationMixin):
     base_model_prefix = "model"
@@ -2444,7 +2443,7 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
     def __init__(self, config: BigBirdPegasusConfig):
         super().__init__(config)
         self.model = BigBirdPegasusModel(config)
-        self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
+        self.register_buffer("final_logits_bias", mint.zeros((1, self.model.shared.num_embeddings)))
         self.lm_head = mint.nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
 
         # Initialize weights and apply final processing
@@ -2468,8 +2467,8 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
         if new_num_tokens <= old_num_tokens:
             new_bias = self.final_logits_bias[:, :new_num_tokens]
         else:
-            extra_bias = torch.zeros((1, new_num_tokens - old_num_tokens), device=self.final_logits_bias.device)
-            new_bias = torch.cat([self.final_logits_bias, extra_bias], dim=1)
+            extra_bias = mint.zeros((1, new_num_tokens - old_num_tokens))
+            new_bias = mint.cat([self.final_logits_bias, extra_bias], dim=1)
         self.register_buffer("final_logits_bias", new_bias)
 
     def get_output_embeddings(self):
@@ -2483,9 +2482,9 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
             self.model._tie_weights()
             self._tie_or_clone_weights(self.lm_head, self.model.shared)
 
-    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
-    @add_end_docstrings(BIGBIRD_PEGASUS_GENERATION_EXAMPLE)
+    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    # @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
+    # @add_end_docstrings(BIGBIRD_PEGASUS_GENERATION_EXAMPLE)
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2543,11 +2542,10 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
         )
 
         lm_logits = self.lm_head(outputs[0])
-        lm_logits = lm_logits + self.final_logits_bias.to(lm_logits.device)
+        lm_logits = lm_logits + self.final_logits_bias
 
         masked_lm_loss = None
         if labels is not None:
-            labels = labels.to(lm_logits.device)
             loss_fct = CrossEntropyLoss()
             masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
 
@@ -2576,19 +2574,19 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
         for layer_past in past_key_values:
             # cached cross_attention states don't have to be reordered -> they are always the same
             reordered_past += (
-                tuple(past_state.index_select(0, beam_idx.to(past_state.device)) for past_state in layer_past[:2])
+                tuple(past_state.index_select(0, beam_idx) for past_state in layer_past[:2])
                 + layer_past[2:],
             )
         return reordered_past
 
 
-@add_start_docstrings(
-    """
-    BigBirdPegasus model with a sequence classification/head on top (a linear layer on top of the pooled output) e.g.
-    for GLUE tasks.
-    """,
-    BIGBIRD_PEGASUS_START_DOCSTRING,
-)
+# @add_start_docstrings(
+#     """
+#     BigBirdPegasus model with a sequence classification/head on top (a linear layer on top of the pooled output) e.g.
+#     for GLUE tasks.
+#     """,
+#     BIGBIRD_PEGASUS_START_DOCSTRING,
+# )
 class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -2605,12 +2603,12 @@ class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    @add_code_sample_docstrings(
-        checkpoint=_CHECKPOINT_FOR_DOC,
-        output_type=Seq2SeqSequenceClassifierOutput,
-        config_class=_CONFIG_FOR_DOC,
-    )
+    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    # @add_code_sample_docstrings(
+    #     checkpoint=_CHECKPOINT_FOR_DOC,
+    #     output_type=Seq2SeqSequenceClassifierOutput,
+    #     config_class=_CONFIG_FOR_DOC,
+    # )
     # Copied from transformers.models.bart.modeling_bart.BartForSequenceClassification.forward
     def construct(
         self,
@@ -2662,9 +2660,9 @@ class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
         )
         hidden_states = outputs[0]  # last hidden state
 
-        eos_mask = input_ids.eq(self.config.eos_token_id).to(hidden_states.device)
+        eos_mask = input_ids.eq(self.config.eos_token_id)
 
-        if len(torch.unique_consecutive(eos_mask.sum(1))) > 1:
+        if len(mint.unique_consecutive(eos_mask.sum(1))) > 1:
             raise ValueError("All examples must have the same number of <eos> tokens.")
         sentence_representation = hidden_states[eos_mask, :].view(hidden_states.shape[0], -1, hidden_states.shape[-1])[
             :, -1, :
@@ -2673,11 +2671,10 @@ class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
 
         loss = None
         if labels is not None:
-            labels = labels.to(logits.device)
             if self.config.problem_type is None:
                 if self.config.num_labels == 1:
                     self.config.problem_type = "regression"
-                elif self.config.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                elif self.config.num_labels > 1 and (labels.dtype == ms.int64 or labels.dtype == ms.int32):
                     self.config.problem_type = "single_label_classification"
                 else:
                     self.config.problem_type = "multi_label_classification"
@@ -2711,13 +2708,13 @@ class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
         )
 
 
-@add_start_docstrings(
-    """
-    BigBirdPegasus Model with a span classification head on top for extractive question-answering tasks like SQuAD (a
-    linear layer on top of the hidden-states output to compute `span start logits` and `span end logits`).
-    """,
-    BIGBIRD_PEGASUS_START_DOCSTRING,
-)
+# @add_start_docstrings(
+#     """
+#     BigBirdPegasus Model with a span classification head on top for extractive question-answering tasks like SQuAD (a
+#     linear layer on top of the hidden-states output to compute `span start logits` and `span end logits`).
+#     """,
+#     BIGBIRD_PEGASUS_START_DOCSTRING,
+# )
 class BigBirdPegasusForQuestionAnswering(BigBirdPegasusPreTrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -2733,12 +2730,12 @@ class BigBirdPegasusForQuestionAnswering(BigBirdPegasusPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    @add_code_sample_docstrings(
-        checkpoint=_CHECKPOINT_FOR_DOC,
-        output_type=Seq2SeqQuestionAnsweringModelOutput,
-        config_class=_CONFIG_FOR_DOC,
-    )
+    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    # @add_code_sample_docstrings(
+    #     checkpoint=_CHECKPOINT_FOR_DOC,
+    #     output_type=Seq2SeqQuestionAnsweringModelOutput,
+    #     config_class=_CONFIG_FOR_DOC,
+    # )
     # Copied from transformers.models.bart.modeling_bart.BartForQuestionAnswering.forward
     def construct(
         self,
@@ -2883,7 +2880,7 @@ class BigBirdPegasusForCausalLM(BigBirdPegasusPreTrainedModel, GenerationMixin):
     def get_decoder(self):
         return self.model.decoder
 
-    @replace_return_docstrings(output_type=CausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
+    # @replace_return_docstrings(output_type=CausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2971,7 +2968,8 @@ class BigBirdPegasusForCausalLM(BigBirdPegasusPreTrainedModel, GenerationMixin):
         Example:
 
         ```python
-        >>> from transformers import AutoTokenizer, BigBirdPegasusForCausalLM
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdPegasusForCausalLM
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-pegasus-large-arxiv")
         >>> model = BigBirdPegasusForCausalLM.from_pretrained(
@@ -3031,7 +3029,7 @@ class BigBirdPegasusForCausalLM(BigBirdPegasusPreTrainedModel, GenerationMixin):
         reordered_past = ()
         for layer_past in past_key_values:
             reordered_past += (
-                tuple(past_state.index_select(0, beam_idx.to(past_state.device)) for past_state in layer_past),
+                tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),
             )
         return reordered_past
 
