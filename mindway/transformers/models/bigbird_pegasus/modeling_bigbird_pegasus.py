@@ -84,7 +84,7 @@ class BigBirdPegasusLearnedPositionalEmbedding(mint.nn.Embedding):
         positions = mint.arange(
             past_key_values_length, past_key_values_length + seq_len, dtype=ms.int64
         )
-        return super().forward(positions)
+        return super().construct(positions)
 
 
 # Copied from transformers.models.bart.modeling_bart.BartScaledWordEmbedding with Bart->BigBirdPegasus
@@ -98,7 +98,7 @@ class BigBirdPegasusScaledWordEmbedding(mint.nn.Embedding):
         self.embed_scale = embed_scale
 
     def construct(self, input_ids: ms.Tensor):
-        return super().forward(input_ids) * self.embed_scale
+        return super().construct(input_ids) * self.embed_scale
 
 
 # Copied from transformers.models.big_bird.modeling_big_bird.BigBirdSelfAttention with BigBird->BigBirdPegasus
@@ -179,7 +179,7 @@ class BigBirdPegasusSelfAttention(nn.Cell):
 
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in BigBirdPegasusModel forward() function)
+            # Apply the attention mask is (precomputed for all layers in BigBirdPegasusModel construct() function)
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
@@ -633,7 +633,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         context_layer = context_layer.view((bsz, n_heads, from_seq_len, -1)) * from_mask
         context_layer = mint.transpose(context_layer, 1, 2)
 
-        # this is just for visualizing; forward pass doesn't depend on following code
+        # this is just for visualizing; construct pass doesn't depend on following code
         if output_attentions:
             # TODO(PVP): need to verify if below code is correct
             attention_probs = mint.zeros(
@@ -1448,7 +1448,7 @@ class BigBirdPegasusDecoderLayer(nn.Cell):
         self.fc2 = mint.nn.Linear(config.decoder_ffn_dim, self.embed_dim)
         self.final_layer_norm = mint.nn.LayerNorm(self.embed_dim)
 
-    # Copied from transformers.models.mbart.modeling_mbart.MBartDecoderLayer.forward
+    # Copied from transformers.models.mbart.modeling_mbart.MBartDecoderLayer.construct
     def construct(
         self,
         hidden_states: ms.Tensor,
