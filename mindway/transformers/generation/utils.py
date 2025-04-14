@@ -1853,7 +1853,7 @@ class GenerationMixin:
             dtype=ms.int64,
         )
         running_sequences[:, :, :cur_len] = self._unflatten_beam_dim(input_ids, batch_size, num_beams)
-        sequences = running_sequences.copy().detach()
+        sequences = running_sequences.copy() # .detach()
 
         # per batch, beam-item score, logprobs
         # initialise score of first beam with 0 and the rest with -1e9. This makes sure that only tokens
@@ -1874,7 +1874,7 @@ class GenerationMixin:
         running_beam_indices = mint.full(
             (batch_size, num_beams, max_length - cur_len), fill_value=-1, dtype=ms.int32
         )
-        beam_indices = running_beam_indices.copy().detach()
+        beam_indices = running_beam_indices.copy() # .detach()
 
         # 4. run the generation loop
         while self._has_unfinished_sequences(this_peer_finished, synced_gpus):
