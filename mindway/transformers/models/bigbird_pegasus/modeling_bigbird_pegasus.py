@@ -2445,7 +2445,8 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
     def __init__(self, config: BigBirdPegasusConfig):
         super().__init__(config)
         self.model = BigBirdPegasusModel(config)
-        self.register_buffer("final_logits_bias", mint.zeros((1, self.model.shared.num_embeddings)))
+        # self.register_buffer("final_logits_bias", mint.zeros((1, self.model.shared.num_embeddings)))
+        self.final_logits_bias = mint.zeros((1, self.model.shared.num_embeddings))
         self.lm_head = mint.nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
 
         # Initialize weights and apply final processing
@@ -2471,7 +2472,8 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
         else:
             extra_bias = mint.zeros((1, new_num_tokens - old_num_tokens))
             new_bias = mint.cat([self.final_logits_bias, extra_bias], dim=1)
-        self.register_buffer("final_logits_bias", new_bias)
+        # self.register_buffer("final_logits_bias", new_bias)
+        self.final_logits_bias = new_bias
 
     def get_output_embeddings(self):
         return self.lm_head
