@@ -1564,7 +1564,7 @@ class BigBirdPegasusClassificationHead(nn.Cell):
         return hidden_states
 
 
-class BigBirdPegasusPreTrainedModel(PreTrainedModel):
+class BigBirdPegasusPreTrainedModel(MSPreTrainedModel):
     config_class = BigBirdPegasusConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
@@ -1595,7 +1595,7 @@ class BigBirdPegasusPreTrainedModel(PreTrainedModel):
 
 
 BIGBIRD_PEGASUS_START_DOCSTRING = r"""
-    This model inherits from [`PreTrainedModel`]. Check the superclass documentation for the generic methods the
+    This model inherits from [`MSPreTrainedModel`]. Check the superclass documentation for the generic methods the
     library implements for all its model (such as downloading or saving, resizing the input embeddings etc.)
 
     This model is also a mindspore [mindspore.nn.Cell](https://www.mindspore.cn/docs/zh-CN/master/api_python/nn/mindspore.nn.Cell.html) subclass.
@@ -1606,7 +1606,7 @@ BIGBIRD_PEGASUS_START_DOCSTRING = r"""
         config ([`BigBirdPegasusConfig`]):
             Model configuration class with all the parameters of the model. Initializing with a config file does not
             load the weights associated with the model, only the configuration. Check out the
-            [`~PreTrainedModel.from_pretrained`] method to load the model weights.
+            [`~MSPreTrainedModel.from_pretrained`] method to load the model weights.
 """
 
 BIGBIRD_PEGASUS_GENERATION_EXAMPLE = r"""
