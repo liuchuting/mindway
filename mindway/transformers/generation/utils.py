@@ -703,7 +703,6 @@ class GenerationMixin:
         past_length = 0
         cache = model_kwargs.get("past_key_values")
         if cache is not None:
-            cache = model_kwargs["past_key_values"]
             if isinstance(cache, Tuple):
                 past_length = get_seq_length(cache)
             elif hasattr(cache, "get_seq_length") and cache.get_seq_length() is not None:
