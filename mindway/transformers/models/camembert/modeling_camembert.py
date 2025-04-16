@@ -810,7 +810,7 @@ class CamembertLMHead(nn.Cell):
         self.layer_norm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
         self.decoder = mint.nn.Linear(config.hidden_size, config.vocab_size)
-        self.bias = nn.Parameter(mint.zeros(config.vocab_size))
+        self.bias = ms.Parameter(mint.zeros(config.vocab_size))
         self.decoder.bias = self.bias
 
     def construct(self, features, **kwargs):
