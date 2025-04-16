@@ -701,7 +701,8 @@ class GenerationMixin:
             return model_kwargs
 
         past_length = 0
-        if model_kwargs.get("past_key_values") is not None:
+        cache = model_kwargs.get("past_key_values")
+        if cache is not None:
             cache = model_kwargs["past_key_values"]
             if isinstance(cache, Tuple):
                 past_length = get_seq_length(cache)
@@ -1631,13 +1632,13 @@ class GenerationMixin:
         # Only the top `num_beam` sequences can be considered for the final returned sequences. Remember: the
         # remaining sequences only exist as a backup to ensure that we have at least `num_beams` sequences to
         # continue.
-        did_top_num_beams_just_finished = next_token_hits_stopping_criteria & top_num_beam_mask[None, :]
+        did_top_num_beams_just_finished = next_token_hits_stopping_criteria & top_num_beam_mask[None, :].to(ms.int32)
 
         # Further process topk logits for the finished beams
         # - add length penalty
         topk_log_probs = topk_log_probs / ((cur_len + 1 - decoder_prompt_len) ** length_penalty)
         # - make sure no scores can be added anymore if beam is full and early stopping is on
-        beams_in_batch_are_full = mint.all(is_sent_finished, axis=-1, keepdims=True) & (early_stopping is True)
+        beams_in_batch_are_full = ops.all(is_sent_finished, axis=-1, keepdims=True) & ms.Tensor(early_stopping is True, ms.int32)
         topk_log_probs += beams_in_batch_are_full.to(ms.float32) * -1.0e9
         # - make sure still running sequences cannot be chosen as finalized beam
         topk_log_probs += (~did_top_num_beams_just_finished) * -1.0e9
@@ -1648,7 +1649,7 @@ class GenerationMixin:
         merged_sequences = mint.cat((sequences, topk_running_sequences), dim=1)
         merged_scores = mint.cat((beam_scores, topk_log_probs), dim=1)
         merged_beam_indices = mint.cat((beam_indices, topk_running_beam_indices), dim=1)
-        merged_is_sent_finished = mint.cat((is_sent_finished, did_top_num_beams_just_finished), dim=1)
+        merged_is_sent_finished = mint.cat((is_sent_finished, did_top_num_beams_just_finished.to(ms.bool_)), dim=1)
         topk_merged_indices = mint.topk(merged_scores, k=num_beams)[1]
         sequences = self._gather_beams(merged_sequences, topk_merged_indices)
         beam_scores = self._gather_beams(merged_scores, topk_merged_indices)
@@ -1725,7 +1726,7 @@ class GenerationMixin:
 
         # b. Is there still a beam without fully completed sequences? This is only relevant if early_stopping is
         # enabled, where we want to finish as soon as all beams have a completed sequence.
-        exists_open_beam = ~(mint.all(is_sent_finished) & (early_stopping is True))
+        exists_open_beam = ms.Tensor(~(mint.all(is_sent_finished) & ms.Tensor(early_stopping is True, ms.int32)), ms.int32)
 
         # c. Have we hit a stopping criteria with all running sequences and have no way to continue? e.g. we have
         # reached `max_length``
@@ -2435,7 +2436,7 @@ class GenerationMixin:
             raise NotImplementedError
 
         # Convert to legacy cache if needed
-        if use_dynamic_cache_by_default and generation_config.return_legacy_cache:
+        if generation_config.return_legacy_cache:
             if isinstance(result, ModelOutput) and hasattr(result, "past_key_values"):
                 if isinstance(result.past_key_values, DynamicCache):  # TODO: add EncoderDecoderCache
                     result.past_key_values = result.past_key_values.to_legacy_cache()
