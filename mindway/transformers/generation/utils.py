@@ -1637,7 +1637,7 @@ class GenerationMixin:
         # - add length penalty
         topk_log_probs = topk_log_probs / ((cur_len + 1 - decoder_prompt_len) ** length_penalty)
         # - make sure no scores can be added anymore if beam is full and early stopping is on
-        beams_in_batch_are_full = ops.all(is_sent_finished, axis=-1, keepdims=True) & ms.Tensor(early_stopping is True, ms.int32)
+        beams_in_batch_are_full = ops.all(is_sent_finished, axis=-1, keep_dims=True) & ms.Tensor(early_stopping is True, ms.int32)
         topk_log_probs += beams_in_batch_are_full.to(ms.float32) * -1.0e9
         # - make sure still running sequences cannot be chosen as finalized beam
         topk_log_probs += (~did_top_num_beams_just_finished) * -1.0e9
