@@ -22,5 +22,6 @@ from . import (
     myt5,
     switch_transformers,
     big_bird,
-    bigbird_pegasus
+    bigbird_pegasus,
+    camembert
 )
