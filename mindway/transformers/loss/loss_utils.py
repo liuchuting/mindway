@@ -22,7 +22,6 @@ def ForCausalLMLoss(
     logits = logits.float()
 
     if shift_labels is None:
-        labels = labels.to(logits.device)
         # Shift so that tokens < n predict n
         labels = mint.nn.functional.pad(labels, (0, 1), value=ignore_index)
         shift_labels = labels[..., 1:].contiguous()
@@ -31,7 +30,6 @@ def ForCausalLMLoss(
     logits = logits.view(-1, vocab_size)
     shift_labels = shift_labels.view(-1)
     # Enable model parallelism
-    shift_labels = shift_labels.to(logits.device)
     loss = fixed_cross_entropy(logits, shift_labels, num_items_in_batch, ignore_index, **kwargs)
     return loss
 
