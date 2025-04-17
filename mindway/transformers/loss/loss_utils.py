@@ -3,7 +3,7 @@ from mindspore import mint
 
 def fixed_cross_entropy(source, target, num_items_in_batch: int = None, ignore_index: int = -100, **kwargs):
     reduction = "sum" if num_items_in_batch is not None else "mean"
-    loss = mint.nn.functional.cross_entropy(source, target, ignore_index=ignore_index, reduction=reduction)
+    loss = mint.nn.CrossEntropyLoss(ignore_index=ignore_index, reduction=reduction)(source, target)
     if reduction == "sum":
         loss = loss / num_items_in_batch
     return loss

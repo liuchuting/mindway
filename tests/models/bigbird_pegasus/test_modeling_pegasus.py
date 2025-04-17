@@ -161,10 +161,11 @@ BERT_CASES = [
         {},
         (inputs_dict["input_ids"],),
         {
-            "decoder_input_ids": inputs_dict["decoder_input_ids"]
+            "decoder_input_ids": inputs_dict["decoder_input_ids"],
+            "use_cache": True
         },
         {
-            "logits": 0,
+            "last_hidden_state": 0,
         },
     ],
     [
@@ -173,12 +174,10 @@ BERT_CASES = [
         "mindway.transformers.BigBirdPegasusForConditionalGeneration",
         (config,),
         {},
-        (np.repeat(np.expand_dims(input_ids, 1), model_tester.num_choices, 1),),
+        (),
         {
-            "attention_mask": np.repeat(np.expand_dims(input_mask, 1), model_tester.num_choices, 1),
-            "token_type_ids": np.repeat(np.expand_dims(token_type_ids, 1), model_tester.num_choices, 1),
-            "labels": choice_labels,
-},
+            input_dict.pop("decoder_attention_mask").pop("decoder_input_ids")
+        },
         {
             "start_logits": 0,
             "end_logits": 1
