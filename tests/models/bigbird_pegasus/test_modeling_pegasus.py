@@ -17,7 +17,6 @@ from transformers import BigBirdPegasusConfig
 
 import mindspore as ms
 
-from mindway.transformers.models.bigbird_pegasus.modeling_bigbird_pegasus import BigBirdPegasusModel
 from tests.modeling_test_utils import (
     MS_DTYPE_MAPPING,
     PT_DTYPE_MAPPING,
@@ -48,7 +47,7 @@ def prepare_bigbird_pegasus_inputs_dict(
         "input_ids": input_ids,
         "decoder_input_ids": decoder_input_ids,
         "attention_mask": attention_mask,
-        "decoder_attention_mask": attention_mask,
+        "decoder_attention_mask": decoder_attention_mask,
     }
     input_dict = {k: input_dict[k] for k in input_dict}
     return input_dict
@@ -146,12 +145,7 @@ model_tester = BigBirdPegasusModelTester()
     inputs_dict
 ) = model_tester.prepare_config_and_inputs()
 
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
+
 BERT_CASES = [
     [
         "BigBirdPegasusModel",
@@ -176,61 +170,19 @@ BERT_CASES = [
         {},
         (),
         {
-            input_dict.pop("decoder_attention_mask").pop("decoder_input_ids")
+            "input_ids": inputs_dict["input_ids"],
+            "attention_mask": inputs_dict["attention_mask"],
         },
         {
-            "start_logits": 0,
-            "end_logits": 1
-        },
-    ],
-    [
-        "BigBirdPegasusForQuestionAnswering",
-        "transformers.BigBirdPegasusForQuestionAnswering",
-        "mindway.transformers.BigBirdPegasusForQuestionAnswering",
-        (config,),
-        {},
-        (input_ids,),
-        {
-            "attention_mask": input_mask,
-            "token_type_ids": token_type_ids,
-            "start_positions": sequence_labels,
-            "end_positions": sequence_labels,
-        },
-        {
-            "start_logits": 0,
-            "end_logits": 1
-        },
-    ],
-    [
-        "BigBirdPegasusForSequenceClassification",
-        "transformers.BigBirdPegasusForSequenceClassification",
-        "mindway.transformers.BigBirdPegasusForSequenceClassification",
-        (config,),
-        {},
-        (input_ids,),
-        {
-            "attention_mask": input_mask,
-            "token_type_ids": token_type_ids,
-            "labels": sequence_labels,
-        },
-        {
-            "logits": 0,
-        },
-    ],
-    [
-        "BigBirdPegasusPreTrainedModel",
-        "transformers.BigBirdPegasusPreTrainedModel",
-        "mindway.transformers.BigBirdPegasusPreTrainedModel",
-        (config,),
-        {},
-        (input_ids,),
-        {
-            "attention_mask": input_mask,
-            "token_type_ids": token_type_ids,
-            "labels": token_labels,
-        },
-        {
-            "logits": 0,
+            "loss": 0,
+            "logits": 1,
+            "past_key_values": 2,
+            "decoder_hidden_states": 3,
+            "decoder_attentions": 4,
+            "cross_attentions": 5,
+            "encoder_last_hidden_state": 6,
+            "encoder_hidden_states": 7,
+            "encoder_attentions": 8,
         },
     ],
 ]
@@ -289,7 +241,7 @@ def test_named_modules(
         pt_outputs_n = []
         ms_outputs_n = []
         for pt_key, ms_idx in outputs_map.items():
-            # print("===map", pt_key, ms_idx)
+            # print(": ==map", pt_key, ms_idx)
             pt_output = getattr(pt_outputs, pt_key)
             ms_output = ms_outputs[pt_key]
             if isinstance(pt_output, (list, tuple)):

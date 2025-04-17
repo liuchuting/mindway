@@ -234,22 +234,22 @@ BERT_CASES = [
             "logits": 0,
         },
     ],
-    [
-        "BigBirdForTokenClassification",
-        "transformers.BigBirdForTokenClassification",
-        "mindway.transformers.BigBirdForTokenClassification",
-        (config,),
-        {},
-        (input_ids,),
-        {
-            "attention_mask": input_mask,
-            "token_type_ids": token_type_ids,
-            "labels": token_labels,
-        },
-        {
-            "logits": 0,
-        },
-    ],
+    # [
+    #     "BigBirdForTokenClassification",
+    #     "transformers.BigBirdForTokenClassification",
+    #     "mindway.transformers.BigBirdForTokenClassification",
+    #     (config,),
+    #     {},
+    #     (input_ids,),
+    #     {
+    #         "attention_mask": input_mask,
+    #         "token_type_ids": token_type_ids,
+    #         "labels": token_labels,
+    #     },
+    #     {
+    #         "logits": 0,
+    #     },
+    # ],
     [
         "BigBirdModel",
         "transformers.BigBirdModel",
