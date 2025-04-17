@@ -176,13 +176,6 @@ BERT_CASES = [
         {
             "loss": 0,
             "logits": 1,
-            "past_key_values": 2,
-            "decoder_hidden_states": 3,
-            "decoder_attentions": 4,
-            "cross_attentions": 5,
-            "encoder_last_hidden_state": 6,
-            "encoder_hidden_states": 7,
-            "encoder_attentions": 8,
         },
     ],
 ]

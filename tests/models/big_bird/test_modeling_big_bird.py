@@ -165,7 +165,8 @@ BERT_CASES = [
             "labels": token_labels,
         },
         {
-            "logits": 0,
+            "loss": 0,
+            "logits": 1,
         },
     ],
     [
@@ -181,7 +182,8 @@ BERT_CASES = [
             "labels": token_labels,
         },
         {
-            "logits": 0,
+            "loss": 0,
+            "logits": 1,
         },
     ],
     [
@@ -197,7 +199,8 @@ BERT_CASES = [
             "labels": choice_labels,
 },
         {
-            "logits": 0,
+            "loss": 0,
+            "logits": 1,
         },
     ],
     [
@@ -214,8 +217,9 @@ BERT_CASES = [
             "end_positions": sequence_labels,
         },
         {
-            "start_logits": 0,
-            "end_logits": 1
+            "loss": 0,
+            "start_logits": 1,
+            "end_logits": 2,
         },
     ],
     [
@@ -231,7 +235,8 @@ BERT_CASES = [
             "labels": sequence_labels,
         },
         {
-            "logits": 0,
+            "loss": 0,
+            "logits": 1,
         },
     ],
     # [

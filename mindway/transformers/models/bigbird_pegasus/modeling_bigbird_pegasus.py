@@ -385,7 +385,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
 
         rand_attn = np.stack(rand_attn, axis=0)
         rand_attn = ms.Tensor(rand_attn, dtype=ms.int64)
-        rand_attn.unsqueeze(0)
+        rand_attn = rand_attn.unsqueeze(0)
         rand_attn = mint.cat([rand_attn for _ in range(batch_size)], dim=0)
 
         rand_mask = self._create_rand_mask_from_inputs(
@@ -421,7 +421,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
         first_context_layer = self.minsdpore_bmm_nd(first_attn_weights, value_layer, ndim=4)
-        first_context_layer.unsqueeze(2)
+        first_context_layer = first_context_layer.unsqueeze(2)
 
         # 2nd PART
         # 2nd block attention scores
@@ -476,7 +476,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
         second_context_layer = self.minsdpore_bmm_nd(second_attn_weights, second_value_mat, ndim=4)
 
-        second_context_layer.unsqueeze(2)
+        second_context_layer = second_context_layer.unsqueeze(2)
 
         # 3rd PART
         # Middle blocks attention scores
@@ -609,7 +609,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
 
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
         second_last_context_layer = self.minsdpore_bmm_nd(second_last_attn_weights, second_last_value_mat, ndim=4)
-        second_last_context_layer.unsqueeze(2)
+        second_last_context_layer = second_last_context_layer.unsqueeze(2)
 
         # 5th PART
         # last block (global) attention scores
@@ -623,7 +623,7 @@ class BigBirdPegasusBlockSparseAttention(nn.Cell):
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
         last_context_layer = self.minsdpore_bmm_nd(last_attn_weights, value_layer, ndim=4)
-        last_context_layer.unsqueeze(2)
+        last_context_layer = last_context_layer.unsqueeze(2)
 
         # combining representations of all tokens
         context_layer = mint.cat(
@@ -2005,7 +2005,7 @@ class BigBirdPegasusEncoder(BigBirdPegasusPreTrainedModel):
                 [to_blocked_mask[:, 1:-3], to_blocked_mask[:, 2:-2], to_blocked_mask[:, 3:-1]], dim=2
             )
             band_mask = mint.einsum("blq,blk->blqk", from_blocked_mask[:, 2:-2], exp_blocked_to_pad)
-            band_mask.unsqueeze(1)
+            band_mask = band_mask.unsqueeze(1)
             return band_mask
 
         blocked_encoder_mask = attention_mask.view(batch_size, seq_length // block_size, block_size)
@@ -2550,7 +2550,7 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
 
         masked_lm_loss = None
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
+            loss_fct = mint.nn.CrossEntropyLoss()
             masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
 
         if not return_dict:
@@ -2690,10 +2690,10 @@ class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
                 else:
                     loss = loss_fct(logits, labels)
             elif self.config.problem_type == "single_label_classification":
-                loss_fct = CrossEntropyLoss()
+                loss_fct = mint.nn.CrossEntropyLoss()
                 loss = loss_fct(logits.view(-1, self.config.num_labels), labels.view(-1))
             elif self.config.problem_type == "multi_label_classification":
-                loss_fct = BCEWithLogitsLoss()
+                loss_fct = mint.nn.BCEWithLogitsLoss()
                 loss = loss_fct(logits, labels)
         if not return_dict:
             output = (logits,) + outputs[1:]
@@ -2810,7 +2810,7 @@ class BigBirdPegasusForQuestionAnswering(BigBirdPegasusPreTrainedModel):
             start_positions = start_positions.clamp(0, ignored_index)
             end_positions = end_positions.clamp(0, ignored_index)
 
-            loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
+            loss_fct = mint.nn.CrossEntropyLoss(ignore_index=ignored_index)
             start_loss = loss_fct(start_logits, start_positions)
             end_loss = loss_fct(end_logits, end_positions)
             total_loss = (start_loss + end_loss) / 2
@@ -3015,7 +3015,7 @@ class BigBirdPegasusForCausalLM(BigBirdPegasusPreTrainedModel, GenerationMixin):
 
         loss = None
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
+            loss_fct = mint.nn.CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.config.vocab_size), labels.view(-1))
 
         if not return_dict:
