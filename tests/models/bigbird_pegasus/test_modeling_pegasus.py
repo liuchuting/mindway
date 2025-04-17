@@ -13,6 +13,7 @@ import inspect
 import numpy as np
 import pytest
 import torch
+from numpy.array_api import not_equal
 from transformers import BigBirdPegasusConfig
 
 import mindspore as ms
@@ -39,9 +40,9 @@ def prepare_bigbird_pegasus_inputs_dict(
     decoder_attention_mask=None,
 ):
     if attention_mask is None:
-        attention_mask = input_ids.ne(config.pad_token_id)
+        attention_mask = np.not_equal(input_ids, config.pad_token_id)
     if decoder_attention_mask is None:
-        decoder_attention_mask = decoder_input_ids.ne(config.pad_token_id)
+        decoder_attention_mask = np.not_equal(decoder_input_ids, config.pad_token_id)
 
     input_dict = {
         "input_ids": input_ids,
@@ -104,7 +105,7 @@ class BigBirdPegasusModelTester:
 
     def prepare_config_and_inputs(self):
         input_ids = ids_numpy([self.batch_size, self.seq_length], self.vocab_size)
-        input_ids = ids_numpy([self.batch_size, self.seq_length], self.vocab_size).clamp(
+        input_ids = ids_numpy([self.batch_size, self.seq_length], self.vocab_size).clip(
             3,
         )
         input_ids[:, -1] = self.eos_token_id  # Eos Token
