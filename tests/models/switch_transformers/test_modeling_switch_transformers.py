@@ -25,7 +25,7 @@ from tests.modeling_test_utils import (
     generalized_parse_args,
     get_modules,
 )
-from tests.models.modeling_common import ids_numpy, random_attention_mask
+from tests.models.modeling_common import ids_numpy
 
 # CrossEntropyLoss not support bf16
 DTYPE_AND_THRESHOLDS = {"fp32": 5e-4, "fp16": 5e-3, "bf16": 1e-2}
