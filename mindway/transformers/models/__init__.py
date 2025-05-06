@@ -19,4 +19,11 @@ from . import (
     t5,
     umt5,
     xlm_roberta,
+<<<<<<< HEAD
+=======
+    myt5,
+    switch_transformers,
+    big_bird,
+    bigbird_pegasus
+>>>>>>> cb03458 (Add bigbird pegasus)
 )

@@ -126,7 +126,6 @@ from .models.big_bird import (
     BigBirdLayer,
     BigBirdModel,
     BigBirdPreTrainedModel,
-    load_tf_weights_in_big_bird,
     BigBirdTokenizer,
     BigBirdTokenizerFast,
 )
