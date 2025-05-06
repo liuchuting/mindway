@@ -125,4 +125,13 @@ from .models.umt5 import (
     UMT5PreTrainedModel,
 )
 from .models.xlm_roberta import XLMRobertaModel, XLMRobertaPreTrainedModel
+from .models.canine import (
+    CanineForMultipleChoice,
+    CanineForQuestionAnswering,
+    CanineForSequenceClassification,
+    CanineForTokenClassification,
+    CanineLayer,
+    CanineModel,
+    CaninePreTrainedModel
+)
 from .processing_utils import ProcessorMixin
