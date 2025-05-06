@@ -70,12 +70,19 @@ class CanineModelTester:
         self.num_hash_buckets = num_hash_buckets
         self.scope = scope
 
+    def random_attention_mask(self, shape, rng=None, name=None):
+        attn_mask = ids_numpy(shape, vocab_size=2, rng=None, name=None)
+        # make sure that at least one token is attended to for each batch
+        # we choose the 1st token so this property of `at least one being non-zero` still holds after applying causal mask
+        attn_mask[:, 0] = 1
+        return attn_mask
+
     def prepare_config_and_inputs(self):
         input_ids = ids_numpy([self.batch_size, self.seq_length], self.vocab_size)
 
         input_mask = None
         if self.use_input_mask:
-            input_mask = ids_numpy([self.batch_size, self.seq_length])
+            input_mask = self.random_attention_mask([self.batch_size, self.seq_length])
 
         token_type_ids = None
         if self.use_token_type_ids:
