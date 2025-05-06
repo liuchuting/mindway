@@ -295,7 +295,7 @@ class CharactersToMolecules(nn.Cell):
     def __init__(self, config):
         super().__init__()
 
-        self.conv = mint.nn.Conv1d(
+        self.conv = nn.Conv1d(
             in_channels=config.hidden_size,
             out_channels=config.hidden_size,
             kernel_size=config.downsampling_rate,
@@ -893,7 +893,7 @@ class CaninePreTrainedModel(PreTrainedModel):
 
     def _init_weights(self, module):
         """Initialize the weights"""
-        if isinstance(module, (mint.nn.Linear, mint.nn.Conv1d)):
+        if isinstance(module, (mint.nn.Linear, nn.Conv1d)):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
