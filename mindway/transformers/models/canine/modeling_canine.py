@@ -260,9 +260,9 @@ class CanineEmbeddings(nn.Cell):
         inputs_embeds: Optional[ms.Tensor] = None,
     ) -> ms.Tensor:
         if input_ids is not None:
-            input_shape = input_ids.size()
+            input_shape = input_ids.shape
         else:
-            input_shape = inputs_embeds.size()[:-1]
+            input_shape = inputs_embeds.shape[:-1]
 
         seq_length = input_shape[1]
 
@@ -417,7 +417,7 @@ class CanineSelfAttention(nn.Cell):
             self.distance_embedding = mint.nn.Embedding(2 * config.max_position_embeddings - 1, self.attention_head_size)
 
     def transpose_for_scores(self, x):
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        new_x_shape = x.shape[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
@@ -444,7 +444,7 @@ class CanineSelfAttention(nn.Cell):
         attention_scores = mint.matmul(query_layer, key_layer.transpose(-1, -2))
 
         if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
-            seq_length = from_tensor.size()[1]
+            seq_length = from_tensor.shape[1]
             position_ids_l = mint.arange(seq_length, dtype=ms.int64).view(-1, 1)
             position_ids_r = mint.arange(seq_length, dtype=ms.int64).view(1, -1)
             distance = position_ids_l - position_ids_r
@@ -485,7 +485,7 @@ class CanineSelfAttention(nn.Cell):
         context_layer = mint.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
         outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
@@ -898,6 +898,7 @@ class CaninePreTrainedModel(PreTrainedModel):
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
+            if module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, mint.nn.Embedding):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
@@ -1111,9 +1112,9 @@ class CanineModel(CaninePreTrainedModel):
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             self.warn_if_padding_and_no_attention_mask(input_ids, attention_mask)
-            input_shape = input_ids.size()
+            input_shape = input_ids.shape
         elif inputs_embeds is not None:
-            input_shape = inputs_embeds.size()[:-1]
+            input_shape = inputs_embeds.shape[:-1]
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
@@ -1388,12 +1389,12 @@ class CanineForMultipleChoice(CaninePreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
-        input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
-        attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
-        position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
+        input_ids = input_ids.view(-1, input_ids.shape[-1]) if input_ids is not None else None
+        attention_mask = attention_mask.view(-1, attention_mask.shape[-1]) if attention_mask is not None else None
+        token_type_ids = token_type_ids.view(-1, token_type_ids.shape[-1]) if token_type_ids is not None else None
+        position_ids = position_ids.view(-1, position_ids.shape[-1]) if position_ids is not None else None
         inputs_embeds = (
-            inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
+            inputs_embeds.view(-1, inputs_embeds.shape[-2], inputs_embeds.shape[-1])
             if inputs_embeds is not None
             else None
         )
@@ -1613,12 +1614,12 @@ class CanineForQuestionAnswering(CaninePreTrainedModel):
         total_loss = None
         if start_positions is not None and end_positions is not None:
             # If we are on multi-GPU, split add a dimension
-            if len(start_positions.size()) > 1:
+            if len(start_positions.shape) > 1:
                 start_positions = start_positions.squeeze(-1)
-            if len(end_positions.size()) > 1:
+            if len(end_positions.shape) > 1:
                 end_positions = end_positions.squeeze(-1)
             # sometimes the start/end positions are outside our model inputs, we ignore these terms
-            ignored_index = start_logits.size(1)
+            ignored_index = start_logits.shape[1]
             start_positions.clamp_(0, ignored_index)
             end_positions.clamp_(0, ignored_index)
 
