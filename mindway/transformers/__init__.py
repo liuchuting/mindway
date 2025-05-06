@@ -115,3 +115,16 @@ from .models.umt5 import (
 )
 from .models.xlm_roberta import XLMRobertaModel, XLMRobertaPreTrainedModel
 from .processing_utils import ProcessorMixin
+from .models.big_bird import (
+    BigBirdForCausalLM,
+    BigBirdForMaskedLM,
+    BigBirdForMultipleChoice,
+    BigBirdForPreTraining,
+    BigBirdForQuestionAnswering,
+    BigBirdForSequenceClassification,
+    BigBirdForTokenClassification,
+    BigBirdLayer,
+    BigBirdModel,
+    BigBirdPreTrainedModel,
+    load_tf_weights_in_big_bird,
+)
