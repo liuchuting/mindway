@@ -104,7 +104,6 @@ class BigBirdPegasusModelTester:
         self.scale_embedding = scale_embedding
 
     def prepare_config_and_inputs(self):
-        input_ids = ids_numpy([self.batch_size, self.seq_length], self.vocab_size)
         input_ids = ids_numpy([self.batch_size, self.seq_length], self.vocab_size).clip(
             3,
         )
@@ -175,7 +174,6 @@ BERT_CASES = [
             "attention_mask": inputs_dict["attention_mask"],
         },
         {
-            "loss": 0,
             "logits": 1,
         },
     ],
