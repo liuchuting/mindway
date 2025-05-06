@@ -22,7 +22,6 @@ MODES = [1]
 class CanineModelTester:
     def __init__(
         self,
-        parent,
         batch_size=13,
         seq_length=7,
         is_training=True,
@@ -48,7 +47,6 @@ class CanineModelTester:
         num_hash_buckets=16,
         scope=None,
     ):
-        self.parent = parent
         self.batch_size = batch_size
         self.seq_length = seq_length
         self.is_training = is_training
