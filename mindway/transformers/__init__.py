@@ -129,3 +129,12 @@ from .models.big_bird import (
     BigBirdTokenizer,
     BigBirdTokenizerFast,
 )
+from .models.bigbird_pegasus import (
+    BigBirdPegasusForCausalLM,
+    BigBirdPegasusForConditionalGeneration,
+    BigBirdPegasusForQuestionAnswering,
+    BigBirdPegasusForSequenceClassification,
+    BigBirdPegasusModel,
+    BigBirdPegasusPreTrainedModel,
+    BigBirdPegasusConfig
+)
