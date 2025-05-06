@@ -128,10 +128,10 @@ LLAMA_CASES = [
         (config,),
         {},
         (),
-        {
-            "input_ids": input_ids.unsqueeze(1).expand(-1, num_choices, -1).contiguous(),
-            "attention_mask": input_mask.unsqueeze(1).expand(-1, num_choices, -1).contiguous(),
-            "token_type_ids": token_type_ids.unsqueeze(1).expand(-1, num_choices, -1).contiguous(),
+            {
+            "input_ids": np.repeat(np.expand_dims(input_ids, 1), model_tester.num_choices, 1),
+            "attention_mask": np.repeat(np.expand_dims(input_mask, 1), model_tester.num_choices, 1),
+            "token_type_ids": np.repeat(np.expand_dims(token_type_ids, 1), model_tester.num_choices, 1),
             "labels": choice_labels,
         },
         {
