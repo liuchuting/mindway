@@ -240,22 +240,24 @@ class BigBirdEmbeddings(nn.Cell):
     # Copied from transformers.models.bert.modeling_bert.BertEmbeddings.__init__
     def __init__(self, config):
         super().__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
-        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
-        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        self.word_embeddings = mint.nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+        self.position_embeddings = mint.nn.Embedding(config.max_position_embeddings, config.hidden_size)
+        self.token_type_embeddings = mint.nn.Embedding(config.type_vocab_size, config.hidden_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.LayerNorm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
-        self.register_buffer(
-            "position_ids", mint.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
-        )
-        self.register_buffer(
-            "token_type_ids", mint.zeros(self.position_ids.size(), dtype=ms.int64), persistent=False
-        )
+        self.position_ids = mint.arange(config.max_position_embeddings).broadcast_to((1, -1))
+        self.token_type_ids =  mint.zeros(self.position_ids.shape, dtype=ms.int64)
+        # self.register_buffer(
+        #     "position_ids", mint.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
+        # )
+        # self.register_buffer(
+        #     "token_type_ids", mint.zeros(self.position_ids.shape, dtype=ms.int64), persistent=False
+        # )
         # End copy
 
         self.rescale_embeddings = config.rescale_embeddings
@@ -265,9 +267,9 @@ class BigBirdEmbeddings(nn.Cell):
         self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, past_key_values_length=0
     ):
         if input_ids is not None:
-            input_shape = input_ids.size()
+            input_shape = input_ids.shape
         else:
-            input_shape = inputs_embeds.size()[:-1]
+            input_shape = inputs_embeds.shape[:-1]
 
         seq_length = input_shape[1]
 
@@ -280,10 +282,10 @@ class BigBirdEmbeddings(nn.Cell):
         if token_type_ids is None:
             if hasattr(self, "token_type_ids"):
                 buffered_token_type_ids = self.token_type_ids[:, :seq_length]
-                buffered_token_type_ids_expanded = buffered_token_type_ids.expand(input_shape[0], seq_length)
+                buffered_token_type_ids_expanded = buffered_token_type_ids.broadcast_to((input_shape[0], seq_length))
                 token_type_ids = buffered_token_type_ids_expanded
             else:
-                token_type_ids = mint.zeros(input_shape, dtype=ms.int64, device=self.position_ids.device)
+                token_type_ids = mint.zeros(input_shape, dtype=ms.int64)
 
         if inputs_embeds is None:
             inputs_embeds = self.word_embeddings(input_ids)
@@ -316,15 +318,15 @@ class BigBirdSelfAttention(nn.Cell):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
+        self.query = mint.nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
+        self.key = mint.nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
+        self.value = mint.nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
 
-        self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.dropout = mint.nn.Dropout(config.attention_probs_dropout_prob)
         self.is_decoder = config.is_decoder
 
     def transpose_for_scores(self, x):
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        new_x_shape = x.shape[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
@@ -384,7 +386,7 @@ class BigBirdSelfAttention(nn.Cell):
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
-        attention_probs = nn.functional.softmax(attention_scores, dim=-1)
+        attention_probs = mint.nn.functional.softmax(attention_scores, dim=-1)
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
@@ -397,7 +399,7 @@ class BigBirdSelfAttention(nn.Cell):
         context_layer = mint.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
         outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
@@ -427,12 +429,12 @@ class BigBirdBlockSparseAttention(nn.Cell):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
+        self.query = mint.nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
+        self.key = mint.nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
+        self.value = mint.nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
 
     def transpose_for_scores(self, x):
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        new_x_shape = x.shape[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
@@ -448,7 +450,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
     ):
         # Currently this `class` can't be used in decoder.
 
-        batch_size, seqlen, _ = hidden_states.size()
+        batch_size, seqlen, _ = hidden_states.shape
         to_seq_length = from_seq_length = seqlen
         from_block_size = to_block_size = self.block_size
 
@@ -584,8 +586,8 @@ class BigBirdBlockSparseAttention(nn.Cell):
             )
 
         rand_attn = np.stack(rand_attn, axis=0)
-        rand_attn = ms.Tensor(rand_attn, device=query_layer.device, dtype=ms.int64)
-        rand_attn.unsqueeze_(0)
+        rand_attn = ms.Tensor(rand_attn, dtype=ms.int64)
+        rand_attn = rand_attn.unsqueeze(0)
         rand_attn = mint.cat([rand_attn for _ in range(batch_size)], dim=0)
 
         rand_mask = self._create_rand_mask_from_inputs(
@@ -615,13 +617,13 @@ class BigBirdBlockSparseAttention(nn.Cell):
 
         first_product = first_product * rsqrt_d
         first_product += (1.0 - to_mask) * attn_mask_penalty
-        first_attn_weights = nn.functional.softmax(
+        first_attn_weights = mint.nn.functional.softmax(
             first_product, dim=-1
         )  # [bsz, n_heads, from_block_size, to_seq_len]
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
         first_context_layer = self.torch_bmm_nd(first_attn_weights, value_layer, ndim=4)
-        first_context_layer.unsqueeze_(2)
+        first_context_layer = first_context_layer.unsqueeze(2)
 
         # 2nd PART
         # 2nd block attention scores
@@ -669,14 +671,14 @@ class BigBirdBlockSparseAttention(nn.Cell):
         )
         second_product = second_product * rsqrt_d
         second_product += (1.0 - mint.minimum(second_seq_pad, second_rand_pad)) * attn_mask_penalty
-        second_attn_weights = nn.functional.softmax(
+        second_attn_weights = mint.nn.functional.softmax(
             second_product, dim=-1
         )  # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size]
 
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
         second_context_layer = self.torch_bmm_nd(second_attn_weights, second_value_mat, ndim=4)
 
-        second_context_layer.unsqueeze_(2)
+        second_context_layer = second_context_layer.unsqueeze(2)
 
         # 3rd PART
         # Middle blocks attention scores
@@ -730,7 +732,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, (5+n_rand_blocks)*to_block_size]
 
         # safely doing softmax since attention matrix is completed
-        attn_weights = nn.functional.softmax(
+        attn_weights = mint.nn.functional.softmax(
             band_product, dim=-1
         )  # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, (5+n_rand_blocks)*to_block_size]
 
@@ -803,13 +805,13 @@ class BigBirdBlockSparseAttention(nn.Cell):
         )
         second_last_product = second_last_product * rsqrt_d
         second_last_product += (1.0 - mint.minimum(second_last_seq_pad, second_last_rand_pad)) * attn_mask_penalty
-        second_last_attn_weights = nn.functional.softmax(
+        second_last_attn_weights = mint.nn.functional.softmax(
             second_last_product, dim=-1
         )  # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size]
 
         # [bsz, n_heads, from_block_size, (4+n_rand_blocks)*to_block_size] x [bsz, n_heads, (4+n_rand_blocks)*to_block_size, -1] ==> [bsz, n_heads, from_block_size, -1]
         second_last_context_layer = self.torch_bmm_nd(second_last_attn_weights, second_last_value_mat, ndim=4)
-        second_last_context_layer.unsqueeze_(2)
+        second_last_context_layer = second_last_context_layer.unsqueeze(2)
 
         # 5th PART
         # last block (global) attention scores
@@ -819,11 +821,11 @@ class BigBirdBlockSparseAttention(nn.Cell):
         last_product = self.torch_bmm_nd_transpose(blocked_query_matrix[:, :, -1], key_layer, ndim=4)
         last_product = last_product * rsqrt_d
         last_product += (1.0 - to_mask) * attn_mask_penalty
-        last_attn_weights = nn.functional.softmax(last_product, dim=-1)  # [bsz, n_heads, from_block_size, n]
+        last_attn_weights = mint.nn.functional.softmax(last_product, dim=-1)  # [bsz, n_heads, from_block_size, n]
 
         # [bsz, n_heads, from_block_size, to_seq_len] x [bsz, n_heads, to_seq_len, -1] ==> [bsz, n_heads, from_block_size, -1]
         last_context_layer = self.torch_bmm_nd(last_attn_weights, value_layer, ndim=4)
-        last_context_layer.unsqueeze_(2)
+        last_context_layer = last_context_layer.unsqueeze(2)
 
         # combining representations of all tokens
         context_layer = mint.cat(
@@ -837,7 +839,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
         if output_attentions:
             # TODO(PVP): need to verify if below code is correct
             attention_probs = mint.zeros(
-                bsz, n_heads, from_seq_len, to_seq_len, dtype=ms.float32, device=context_layer.device
+                bsz, n_heads, from_seq_len, to_seq_len, dtype=ms.float32
             )
 
             # 1st query block
@@ -960,7 +962,7 @@ class BigBirdBlockSparseAttention(nn.Cell):
         num_indices_to_gather = indices.shape[-2] * indices.shape[-1]
         num_indices_to_pick_from = params.shape[2]
 
-        shift = mint.arange(indices.shape[0] * indices.shape[1] * num_indices_to_gather, device=indices.device)
+        shift = mint.arange(indices.shape[0] * indices.shape[1] * num_indices_to_gather)
         indices_shift = mint.div(shift, num_indices_to_gather, rounding_mode="floor") * num_indices_to_pick_from
 
         flattened_indices = indices.view(-1) + indices_shift
@@ -1299,9 +1301,9 @@ class BigBirdBlockSparseAttention(nn.Cell):
 class BigBirdSelfOutput(nn.Cell):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dense = mint.nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
 
     def construct(self, hidden_states: ms.Tensor, input_tensor: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -1351,7 +1353,7 @@ class BigBirdAttention(nn.Cell):
         self.self = attn_weights
         self.attention_type = value
         if not self.training:
-            self.self.eval()
+            self.self.set_train(False)
 
     def construct(
         self,
@@ -1402,7 +1404,7 @@ class BigBirdAttention(nn.Cell):
 class BigBirdIntermediate(nn.Cell):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.dense = mint.nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -1418,9 +1420,9 @@ class BigBirdIntermediate(nn.Cell):
 class BigBirdOutput(nn.Cell):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dense = mint.nn.Linear(config.intermediate_size, config.hidden_size)
+        self.LayerNorm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
 
     def construct(self, hidden_states: ms.Tensor, input_tensor: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -1669,12 +1671,12 @@ class BigBirdEncoder(nn.Cell):
 class BigBirdPredictionHeadTransform(nn.Cell):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = mint.nn.Linear(config.hidden_size, config.hidden_size)
         if isinstance(config.hidden_act, str):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def construct(self, hidden_states: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -1691,9 +1693,9 @@ class BigBirdLMPredictionHead(nn.Cell):
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
-        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self.decoder = mint.nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
-        self.bias = nn.Parameter(mint.zeros(config.vocab_size))
+        self.bias = ms.Parameter(mint.zeros(config.vocab_size))
 
         # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
         self.decoder.bias = self.bias
@@ -1722,7 +1724,7 @@ class BigBirdOnlyMLMHead(nn.Cell):
 class BigBirdOnlyNSPHead(nn.Cell):
     def __init__(self, config):
         super().__init__()
-        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+        self.seq_relationship = mint.nn.Linear(config.hidden_size, 2)
 
     def construct(self, pooled_output):
         seq_relationship_score = self.seq_relationship(pooled_output)
@@ -1734,7 +1736,7 @@ class BigBirdPreTrainingHeads(nn.Cell):
     def __init__(self, config):
         super().__init__()
         self.predictions = BigBirdLMPredictionHead(config)
-        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+        self.seq_relationship = mint.nn.Linear(config.hidden_size, 2)
 
     def construct(self, sequence_output, pooled_output):
         prediction_scores = self.predictions(sequence_output)
@@ -1755,17 +1757,17 @@ class BigBirdPreTrainedModel(MSPreTrainedModel):
 
     def _init_weights(self, module):
         """Initialize the weights"""
-        if isinstance(module, nn.Linear):
+        if isinstance(module, mint.nn.Linear):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
                 module.bias.data.zero_()
-        elif isinstance(module, nn.Embedding):
+        elif isinstance(module, mint.nn.Embedding):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
-        elif isinstance(module, nn.LayerNorm):
+        elif isinstance(module, mint.nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
@@ -1928,8 +1930,8 @@ class BigBirdModel(BigBirdPreTrainedModel):
         self.encoder = BigBirdEncoder(config)
 
         if add_pooling_layer:
-            self.pooler = nn.Linear(config.hidden_size, config.hidden_size)
-            self.activation = nn.Tanh()
+            self.pooler = mint.nn.Linear(config.hidden_size, config.hidden_size)
+            self.activation = mint.nn.Tanh()
         else:
             self.pooler = None
             self.activation = None
@@ -2018,27 +2020,26 @@ class BigBirdModel(BigBirdPreTrainedModel):
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             self.warn_if_padding_and_no_attention_mask(input_ids, attention_mask)
-            input_shape = input_ids.size()
+            input_shape = input_ids.shape
         elif inputs_embeds is not None:
-            input_shape = inputs_embeds.size()[:-1]
+            input_shape = inputs_embeds.shape[:-1]
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
         batch_size, seq_length = input_shape
-        device = input_ids.device if input_ids is not None else inputs_embeds.device
 
         # past_key_values_length
         past_key_values_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
 
         if attention_mask is None:
-            attention_mask = mint.ones(((batch_size, seq_length + past_key_values_length)), device=device)
+            attention_mask = mint.ones(((batch_size, seq_length + past_key_values_length)))
         if token_type_ids is None:
             if hasattr(self.embeddings, "token_type_ids"):
                 buffered_token_type_ids = self.embeddings.token_type_ids[:, :seq_length]
-                buffered_token_type_ids_expanded = buffered_token_type_ids.expand(batch_size, seq_length)
+                buffered_token_type_ids_expanded = buffered_token_type_ids.broadcast_to((batch_size, seq_length))
                 token_type_ids = buffered_token_type_ids_expanded
             else:
-                token_type_ids = mint.zeros(input_shape, dtype=ms.int64, device=device)
+                token_type_ids = mint.zeros(input_shape, dtype=ms.int64)
 
         # in order to use block_sparse attention, sequence_length has to be at least
         # bigger than all global attentions: 2 * block_size
@@ -2047,7 +2048,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
         max_tokens_to_attend = (5 + 2 * self.config.num_random_blocks) * self.config.block_size
         if self.attention_type == "block_sparse" and seq_length <= max_tokens_to_attend:
             # change attention_type from block_sparse to original_full
-            sequence_length = input_ids.size(1) if input_ids is not None else inputs_embeds.size(1)
+            sequence_length = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
             logger.warning(
                 "Attention type 'block_sparse' is not possible if sequence_length: "
                 f"{sequence_length} <= num global tokens: 2 * config.block_size "
@@ -2102,10 +2103,10 @@ class BigBirdModel(BigBirdPreTrainedModel):
         # If a 2D or 3D attention mask is provided for the cross-attention
         # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
         if self.config.is_decoder and encoder_hidden_states is not None:
-            encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.size()
+            encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.shape
             encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
             if encoder_attention_mask is None:
-                encoder_attention_mask = mint.ones(encoder_hidden_shape, device=device)
+                encoder_attention_mask = mint.ones(encoder_hidden_shape)
             encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
         else:
             encoder_extended_attention_mask = None
@@ -2164,7 +2165,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
 
     @staticmethod
     def create_masks_for_block_sparse_attn(attention_mask: ms.Tensor, block_size: int):
-        batch_size, seq_length = attention_mask.size()
+        batch_size, seq_length = attention_mask.shape
         if seq_length % block_size != 0:
             raise ValueError(
                 f"Sequence length must be multiple of block size, but sequence length is {seq_length}, while block"
@@ -2189,7 +2190,7 @@ class BigBirdModel(BigBirdPreTrainedModel):
                 [to_blocked_mask[:, 1:-3], to_blocked_mask[:, 2:-2], to_blocked_mask[:, 3:-1]], dim=2
             )
             band_mask = mint.einsum("blq,blk->blqk", from_blocked_mask[:, 2:-2], exp_blocked_to_pad)
-            band_mask.unsqueeze_(1)
+            band_mask = band_mask.unsqueeze(1)
             return band_mask
 
         blocked_encoder_mask = attention_mask.view(batch_size, seq_length // block_size, block_size)
@@ -2223,10 +2224,10 @@ class BigBirdModel(BigBirdPreTrainedModel):
                 f"`config.block_size`: {block_size}"
             )
             if input_ids is not None:
-                input_ids = nn.functional.pad(input_ids, (0, padding_len), value=pad_token_id)
+                input_ids = mint.nn.functional.pad(input_ids, (0, padding_len), value=pad_token_id)
             if position_ids is not None:
                 # pad with position_id = pad_token_id as in modeling_bigbird.BigBirdEmbeddings
-                position_ids = nn.functional.pad(position_ids, (0, padding_len), value=pad_token_id)
+                position_ids = mint.nn.functional.pad(position_ids, (0, padding_len), value=pad_token_id)
             if inputs_embeds is not None:
                 input_ids_padding = inputs_embeds.new_full(
                     (batch_size, padding_len),
@@ -2236,10 +2237,10 @@ class BigBirdModel(BigBirdPreTrainedModel):
                 inputs_embeds_padding = self.embeddings(input_ids_padding)
                 inputs_embeds = mint.cat([inputs_embeds, inputs_embeds_padding], dim=-2)
 
-            attention_mask = nn.functional.pad(
+            attention_mask = mint.nn.functional.pad(
                 attention_mask, (0, padding_len), value=False
             )  # no attention on the padding tokens
-            token_type_ids = nn.functional.pad(token_type_ids, (0, padding_len), value=0)  # pad with token_type_id = 0
+            token_type_ids = mint.nn.functional.pad(token_type_ids, (0, padding_len), value=0)  # pad with token_type_id = 0
 
         return padding_len, input_ids, attention_mask, token_type_ids, position_ids, inputs_embeds
 
@@ -2299,13 +2300,16 @@ class BigBirdForPreTraining(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> from transformers import AutoTokenizer, BigBirdForPreTraining
-        >>> import torch
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForPreTraining
+        >>> import mindspore
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-roberta-base")
         >>> model = BigBirdForPreTraining.from_pretrained("google/bigbird-roberta-base")
 
-        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="pt")
+        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="np")
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
         >>> outputs = model(**inputs)
 
         >>> prediction_logits = outputs.prediction_logits
@@ -2404,8 +2408,10 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> import torch
-        >>> from transformers import AutoTokenizer, BigBirdForMaskedLM
+        >>> import mindspore as ms
+        >>> from mindspore import mint
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForMaskedLM
         >>> from datasets import load_dataset
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-roberta-base")
@@ -2420,12 +2426,13 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
 
         >>> # add mask_token
         >>> LONG_ARTICLE_TO_MASK = LONG_ARTICLE_TARGET.replace("maximum", "[MASK]")
-        >>> inputs = tokenizer(LONG_ARTICLE_TO_MASK, return_tensors="pt")
+        >>> inputs = tokenizer(LONG_ARTICLE_TO_MASK, return_tensors="np")
         >>> # long article input
         >>> list(inputs["input_ids"].shape)
         [1, 919]
-
-        >>> with torch.no_grad():
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
+        >>> with mindspore._no_grad():
         ...     logits = model(**inputs).logits
         >>> # retrieve index of [MASK]
         >>> mask_token_index = (inputs.input_ids == tokenizer.mask_token_id)[0].nonzero(as_tuple=True)[0]
@@ -2435,8 +2442,10 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
         ```
 
         ```python
-        >>> labels = tokenizer(LONG_ARTICLE_TARGET, return_tensors="pt")["input_ids"]
-        >>> labels = mint.where(inputs.input_ids == tokenizer.mask_token_id, labels, -100)
+        >>> labels = tokenizer(LONG_ARTICLE_TARGET, return_tensors="np")["input_ids"]
+        >>> labels = mint.where(ms.tensor(inputs.input_ids) == mindspore.tensor(tokenizer.mask_token_id), ms.tensor(labels), -100)
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
         >>> outputs = model(**inputs, labels=labels)
         >>> round(outputs.loss.item(), 2)
         1.99
@@ -2486,8 +2495,7 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
             raise ValueError("The PAD token should be defined for generation")
         attention_mask = mint.cat([attention_mask, attention_mask.new_zeros((attention_mask.shape[0], 1))], dim=-1)
         dummy_token = mint.full(
-            (effective_batch_size, 1), self.config.pad_token_id, dtype=ms.int64, device=input_ids.device
-        )
+            (effective_batch_size, 1), self.config.pad_token_id, dtype=ms.int64)
         input_ids = mint.cat([input_ids, dummy_token], dim=1)
 
         return {"input_ids": input_ids, "attention_mask": attention_mask}
@@ -2613,7 +2621,7 @@ class BigBirdForCausalLM(BigBirdPreTrainedModel, GenerationMixin):
         reordered_past = ()
         for layer_past in past_key_values:
             reordered_past += (
-                tuple(past_state.index_select(0, beam_idx.to(past_state.device)) for past_state in layer_past[:2])
+                tuple(past_state.index_select(0, beam_idx) for past_state in layer_past[:2])
                 + layer_past[2:],
             )
         return reordered_past
@@ -2624,12 +2632,12 @@ class BigBirdClassificationHead(nn.Cell):
 
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = mint.nn.Linear(config.hidden_size, config.hidden_size)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
-        self.dropout = nn.Dropout(classifier_dropout)
-        self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
+        self.dropout = mint.nn.Dropout(classifier_dropout)
+        self.out_proj = mint.nn.Linear(config.hidden_size, config.num_labels)
 
         self.config = config
 
@@ -2688,7 +2696,8 @@ class BigBirdForSequenceClassification(BigBirdPreTrainedModel):
 
         ```python
         >>> import mindspore as ms
-        >>> from transformers import AutoTokenizer, BigBirdForSequenceClassification
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForSequenceClassification
         >>> from datasets import load_dataset
 
         >>> tokenizer = AutoTokenizer.from_pretrained("l-yohai/bigbird-roberta-base-mnli")
@@ -2696,12 +2705,13 @@ class BigBirdForSequenceClassification(BigBirdPreTrainedModel):
         >>> squad_ds = load_dataset("rajpurkar/squad_v2", split="train")  # doctest: +IGNORE_RESULT
 
         >>> LONG_ARTICLE = squad_ds[81514]["context"]
-        >>> inputs = tokenizer(LONG_ARTICLE, return_tensors="pt")
+        >>> inputs = tokenizer(LONG_ARTICLE, return_tensors="np")
         >>> # long input article
         >>> list(inputs["input_ids"].shape)
         [1, 919]
-
-        >>> with torch.no_grad():
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = mindspore.tensor(v)
+        >>> with ms._no_grad():
         ...     logits = model(**inputs).logits
         >>> predicted_class_id = logits.argmax().item()
         >>> model.config.id2label[predicted_class_id]
@@ -2783,8 +2793,8 @@ class BigBirdForMultipleChoice(BigBirdPreTrainedModel):
         super().__init__(config)
 
         self.bert = BigBirdModel(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, 1)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = mint.nn.Linear(config.hidden_size, 1)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -2819,12 +2829,12 @@ class BigBirdForMultipleChoice(BigBirdPreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
-        input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
-        attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
-        position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
+        input_ids = input_ids.view(-1, input_ids.shape[-1]) if input_ids is not None else None
+        attention_mask = attention_mask.view(-1, attention_mask.shape[-1]) if attention_mask is not None else None
+        token_type_ids = token_type_ids.view(-1, token_type_ids.shape[-1]) if token_type_ids is not None else None
+        position_ids = position_ids.view(-1, position_ids.shape[-1]) if position_ids is not None else None
         inputs_embeds = (
-            inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
+            inputs_embeds.view(-1, inputs_embeds.shape[-2], inputs_embeds.shape[-1])
             if inputs_embeds is not None
             else None
         )
@@ -2880,8 +2890,8 @@ class BigBirdForTokenClassification(BigBirdPreTrainedModel):
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
-        self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.dropout = mint.nn.Dropout(classifier_dropout)
+        self.classifier = mint.nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -2950,10 +2960,10 @@ class BigBirdForQuestionAnsweringHead(nn.Cell):
 
     def __init__(self, config):
         super().__init__()
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
         self.intermediate = BigBirdIntermediate(config)
         self.output = BigBirdOutput(config)
-        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
+        self.qa_outputs = mint.nn.Linear(config.hidden_size, config.num_labels)
 
     def construct(self, encoder_output):
         hidden_states = self.dropout(encoder_output)
@@ -3016,8 +3026,9 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         Example:
 
         ```python
-        >>> import torch
-        >>> from transformers import AutoTokenizer, BigBirdForQuestionAnswering
+        >>> import mindspore as ms
+        >>> from transformers import AutoTokenizer
+        >>> from mindway import BigBirdForQuestionAnswering
         >>> from datasets import load_dataset
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/bigbird-roberta-base")
@@ -3030,12 +3041,13 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         >>> QUESTION
         'During daytime how high can the temperatures reach?'
 
-        >>> inputs = tokenizer(QUESTION, LONG_ARTICLE, return_tensors="pt")
+        >>> inputs = tokenizer(QUESTION, LONG_ARTICLE, return_tensors="np")
         >>> # long article and question input
         >>> list(inputs["input_ids"].shape)
         [1, 929]
-
-        >>> with torch.no_grad():
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = ms.tensor(v)
+        >>> with ms._no_grad():
         ...     outputs = model(**inputs)
 
         >>> answer_start_index = outputs.start_logits.argmax()
@@ -3052,22 +3064,22 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        seqlen = input_ids.size(1) if input_ids is not None else inputs_embeds.size(1)
+        seqlen = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
         if question_lengths is None and input_ids is not None:
             # assuming input_ids format: <cls> <question> <sep> context <sep>
             question_lengths = mint.argmax(input_ids.eq(self.sep_token_id).int(), dim=-1) + 1
-            question_lengths.unsqueeze_(1)
+            question_lengths = question_lengths.unsqueeze(1)
 
         logits_mask = None
         if question_lengths is not None:
             # setting lengths logits to `-inf`
             logits_mask = self.prepare_question_mask(question_lengths, seqlen)
             if token_type_ids is None:
-                token_type_ids = mint.ones(logits_mask.size(), dtype=int, device=logits_mask.device) - logits_mask
+                token_type_ids = mint.ones(logits_mask.shape, dtype=ms.int32) - logits_mask
             logits_mask = logits_mask
             logits_mask[:, 0] = False
-            logits_mask.unsqueeze_(2)
+            logits_mask = logits_mask.unsqueeze(2)
 
         outputs = self.bert(
             input_ids,
@@ -3095,12 +3107,12 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         total_loss = None
         if start_positions is not None and end_positions is not None:
             # If we are on multi-GPU, split add a dimension
-            if len(start_positions.size()) > 1:
+            if len(start_positions.shape) > 1:
                 start_positions = start_positions.squeeze(-1)
-            if len(end_positions.size()) > 1:
+            if len(end_positions.shape) > 1:
                 end_positions = end_positions.squeeze(-1)
             # sometimes the start/end positions are outside our model inputs, we ignore these terms
-            ignored_index = start_logits.size(1)
+            ignored_index = start_logits.shape[1]
             start_positions = start_positions.clamp(0, ignored_index)
             end_positions = end_positions.clamp(0, ignored_index)
 
@@ -3125,8 +3137,8 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
     @staticmethod
     def prepare_question_mask(q_lengths: ms.Tensor, maxlen: int):
         # q_lengths -> (bz, 1)
-        mask = mint.arange(0, maxlen).to(q_lengths.device)
-        mask.unsqueeze_(0)  # -> (1, maxlen)
+        mask = mint.arange(0, maxlen)
+        mask = mask.unsqueeze(0)  # -> (1, maxlen)
         mask = mint.where(mask < q_lengths, 1, 0)
         return mask
 
