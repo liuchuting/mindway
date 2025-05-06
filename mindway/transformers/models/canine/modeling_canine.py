@@ -898,7 +898,6 @@ class CaninePreTrainedModel(PreTrainedModel):
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
-            if module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, mint.nn.Embedding):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
