@@ -21,7 +21,6 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 import mindspore as ms
-# import torch.utils.checkpoint
 from mindspore import mint, nn
 from transformers.utils import ModelOutput
 
@@ -38,12 +37,12 @@ from ...modeling_outputs import (
 )
 from ...modeling_utils import MSPreTrainedModel
 from ...mindspore_utils import apply_chunking_to_forward
-from ...utils import (
-    # add_code_sample_docstrings,
-    # add_start_docstrings,
-    # add_start_docstrings_to_model_forward,
+from transformers.utils import (
+    add_code_sample_docstrings,
+    add_start_docstrings,
+    add_start_docstrings_to_model_forward,
     logging,
-    # replace_return_docstrings,
+    replace_return_docstrings,
 )
 from .configuration_big_bird import BigBirdConfig
 
@@ -1902,10 +1901,10 @@ class BigBirdForQuestionAnsweringModelOutput(ModelOutput):
     attentions: Optional[Tuple[ms.Tensor]] = None
 
 
-# @add_start_docstrings(
-#     "The bare BigBird Model transformer outputting raw hidden-states without any specific head on top.",
-#     BIG_BIRD_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    "The bare BigBird Model transformer outputting raw hidden-states without any specific head on top.",
+    BIG_BIRD_START_DOCSTRING,
+)
 class BigBirdModel(BigBirdPreTrainedModel):
     """
 
@@ -1963,12 +1962,12 @@ class BigBirdModel(BigBirdPreTrainedModel):
         self.attention_type = value
         self.encoder.set_attention_type(value)
 
-    # @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    # @add_code_sample_docstrings(
-    #     checkpoint=_CHECKPOINT_FOR_DOC,
-    #     output_type=BaseModelOutputWithPoolingAndCrossAttentions,
-    #     config_class=_CONFIG_FOR_DOC,
-    # )
+    @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @add_code_sample_docstrings(
+        checkpoint=_CHECKPOINT_FOR_DOC,
+        output_type=BaseModelOutputWithPoolingAndCrossAttentions,
+        config_class=_CONFIG_FOR_DOC,
+    )
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2264,8 +2263,8 @@ class BigBirdForPreTraining(BigBirdPreTrainedModel):
         self.cls.predictions.decoder = new_embeddings
         self.cls.predictions.bias = new_embeddings.bias
 
-    # @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    # @replace_return_docstrings(output_type=BigBirdForPreTrainingOutput, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(output_type=BigBirdForPreTrainingOutput, config_class=_CONFIG_FOR_DOC)
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2354,7 +2353,7 @@ class BigBirdForPreTraining(BigBirdPreTrainedModel):
         )
 
 
-# @add_start_docstrings("""BigBird Model with a `language modeling` head on top.""", BIG_BIRD_START_DOCSTRING)
+@add_start_docstrings("""BigBird Model with a `language modeling` head on top.""", BIG_BIRD_START_DOCSTRING)
 class BigBirdForMaskedLM(BigBirdPreTrainedModel):
     _tied_weights_keys = ["cls.predictions.decoder.weight", "cls.predictions.decoder.bias"]
 
@@ -2380,8 +2379,8 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
         self.cls.predictions.decoder = new_embeddings
         self.cls.predictions.bias = new_embeddings.bias
 
-    # @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    # @replace_return_docstrings(output_type=MaskedLMOutput, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(output_type=MaskedLMOutput, config_class=_CONFIG_FOR_DOC)
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2501,9 +2500,9 @@ class BigBirdForMaskedLM(BigBirdPreTrainedModel):
         return {"input_ids": input_ids, "attention_mask": attention_mask}
 
 
-# @add_start_docstrings(
-#     """BigBird Model with a `language modeling` head on top for CLM fine-tuning.""", BIG_BIRD_START_DOCSTRING
-# )
+@add_start_docstrings(
+    """BigBird Model with a `language modeling` head on top for CLM fine-tuning.""", BIG_BIRD_START_DOCSTRING
+)
 class BigBirdForCausalLM(BigBirdPreTrainedModel, GenerationMixin):
     _tied_weights_keys = ["cls.predictions.decoder.weight", "cls.predictions.decoder.bias"]
 
@@ -2526,12 +2525,12 @@ class BigBirdForCausalLM(BigBirdPreTrainedModel, GenerationMixin):
         self.cls.predictions.decoder = new_embeddings
         self.cls.predictions.bias = new_embeddings.bias
 
-    # @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    # @add_code_sample_docstrings(
-    #     checkpoint=_CHECKPOINT_FOR_DOC,
-    #     output_type=CausalLMOutputWithCrossAttentions,
-    #     config_class=_CONFIG_FOR_DOC,
-    # )
+    @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @add_code_sample_docstrings(
+        checkpoint=_CHECKPOINT_FOR_DOC,
+        output_type=CausalLMOutputWithCrossAttentions,
+        config_class=_CONFIG_FOR_DOC,
+    )
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2651,13 +2650,13 @@ class BigBirdClassificationHead(nn.Cell):
         return x
 
 
-# @add_start_docstrings(
-#     """
-#     BigBird Model transformer with a sequence classification/regression head on top (a linear layer on top of the
-#     pooled output) e.g. for GLUE tasks.
-#     """,
-#     BIG_BIRD_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    """
+    BigBird Model transformer with a sequence classification/regression head on top (a linear layer on top of the
+    pooled output) e.g. for GLUE tasks.
+    """,
+    BIG_BIRD_START_DOCSTRING,
+)
 class BigBirdForSequenceClassification(BigBirdPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -2669,8 +2668,8 @@ class BigBirdForSequenceClassification(BigBirdPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    # @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    # @replace_return_docstrings(output_type=SequenceClassifierOutput, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(output_type=SequenceClassifierOutput, config_class=_CONFIG_FOR_DOC)
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2781,13 +2780,13 @@ class BigBirdForSequenceClassification(BigBirdPreTrainedModel):
         )
 
 
-# @add_start_docstrings(
-#     """
-#     BigBird Model with a multiple choice classification head on top (a linear layer on top of the pooled output and a
-#     softmax) e.g. for RocStories/SWAG tasks.
-#     """,
-#     BIG_BIRD_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    """
+    BigBird Model with a multiple choice classification head on top (a linear layer on top of the pooled output and a
+    softmax) e.g. for RocStories/SWAG tasks.
+    """,
+    BIG_BIRD_START_DOCSTRING,
+)
 class BigBirdForMultipleChoice(BigBirdPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -2799,14 +2798,14 @@ class BigBirdForMultipleChoice(BigBirdPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    # @add_start_docstrings_to_model_forward(
-    #     BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, num_choices, sequence_length")
-    # )
-    # @add_code_sample_docstrings(
-    #     checkpoint=_CHECKPOINT_FOR_DOC,
-    #     output_type=MultipleChoiceModelOutput,
-    #     config_class=_CONFIG_FOR_DOC,
-    # )
+    @add_start_docstrings_to_model_forward(
+        BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, num_choices, sequence_length")
+    )
+    @add_code_sample_docstrings(
+        checkpoint=_CHECKPOINT_FOR_DOC,
+        output_type=MultipleChoiceModelOutput,
+        config_class=_CONFIG_FOR_DOC,
+    )
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2874,13 +2873,13 @@ class BigBirdForMultipleChoice(BigBirdPreTrainedModel):
         )
 
 
-# @add_start_docstrings(
-#     """
-#     BigBird Model with a token classification head on top (a linear layer on top of the hidden-states output) e.g. for
-#     Named-Entity-Recognition (NER) tasks.
-#     """,
-#     BIG_BIRD_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    """
+    BigBird Model with a token classification head on top (a linear layer on top of the hidden-states output) e.g. for
+    Named-Entity-Recognition (NER) tasks.
+    """,
+    BIG_BIRD_START_DOCSTRING,
+)
 class BigBirdForTokenClassification(BigBirdPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -2896,12 +2895,12 @@ class BigBirdForTokenClassification(BigBirdPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    # @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    # @add_code_sample_docstrings(
-    #     checkpoint=_CHECKPOINT_FOR_DOC,
-    #     output_type=TokenClassifierOutput,
-    #     config_class=_CONFIG_FOR_DOC,
-    # )
+    @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @add_code_sample_docstrings(
+        checkpoint=_CHECKPOINT_FOR_DOC,
+        output_type=TokenClassifierOutput,
+        config_class=_CONFIG_FOR_DOC,
+    )
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2973,13 +2972,13 @@ class BigBirdForQuestionAnsweringHead(nn.Cell):
         return hidden_states
 
 
-# @add_start_docstrings(
-#     """
-#     BigBird Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear
-#     layers on top of the hidden-states output to compute `span start logits` and `span end logits`).
-#     """,
-#     BIG_BIRD_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    """
+    BigBird Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear
+    layers on top of the hidden-states output to compute `span start logits` and `span end logits`).
+    """,
+    BIG_BIRD_START_DOCSTRING,
+)
 class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
     def __init__(self, config, add_pooling_layer=False):
         super().__init__(config)
@@ -2994,8 +2993,8 @@ class BigBirdForQuestionAnswering(BigBirdPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    # @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    # @replace_return_docstrings(output_type=BigBirdForQuestionAnsweringModelOutput, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(BIG_BIRD_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(output_type=BigBirdForQuestionAnsweringModelOutput, config_class=_CONFIG_FOR_DOC)
     def construct(
         self,
         input_ids: Optional[ms.Tensor] = None,

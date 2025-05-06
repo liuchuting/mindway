@@ -35,13 +35,13 @@ from ...modeling_outputs import (
     Seq2SeqSequenceClassifierOutput,
 )
 from ...modeling_utils import MSPreTrainedModel
-from ...utils import (
-    # add_code_sample_docstrings,
-    # add_end_docstrings,
-    # add_start_docstrings,
-    # add_start_docstrings_to_model_forward,
+from transformers.utils import (
+    add_code_sample_docstrings,
+    add_end_docstrings,
+    add_start_docstrings,
+    add_start_docstrings_to_model_forward,
     logging,
-    # replace_return_docstrings,
+    replace_return_docstrings,
 )
 from ...mindspore_adapter import dtype_to_max, dtype_to_min
 from .configuration_bigbird_pegasus import BigBirdPegasusConfig
@@ -2295,10 +2295,10 @@ class BigBirdPegasusDecoder(BigBirdPegasusPreTrainedModel):
         )
 
 
-# @add_start_docstrings(
-#     "The bare BigBirdPegasus Model outputting raw hidden-states without any specific head on top.",
-#     BIGBIRD_PEGASUS_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    "The bare BigBirdPegasus Model outputting raw hidden-states without any specific head on top.",
+    BIGBIRD_PEGASUS_START_DOCSTRING,
+)
 class BigBirdPegasusModel(BigBirdPegasusPreTrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -2336,13 +2336,13 @@ class BigBirdPegasusModel(BigBirdPegasusPreTrainedModel):
     def get_decoder(self):
         return self.decoder
 
-    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    # @add_code_sample_docstrings(
-    #     checkpoint=_CHECKPOINT_FOR_DOC,
-    #     output_type=Seq2SeqModelOutput,
-    #     config_class=_CONFIG_FOR_DOC,
-    #     expected_output=_EXPECTED_OUTPUT_SHAPE,
-    # )
+    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    @add_code_sample_docstrings(
+        checkpoint=_CHECKPOINT_FOR_DOC,
+        output_type=Seq2SeqModelOutput,
+        config_class=_CONFIG_FOR_DOC,
+        expected_output=_EXPECTED_OUTPUT_SHAPE,
+    )
     # Copied from transformers.models.bart.modeling_bart.BartModel.forward with Bart->BigBirdPegasus
     def construct(
         self,
@@ -2432,11 +2432,11 @@ class BigBirdPegasusModel(BigBirdPegasusPreTrainedModel):
         )
 
 
-# @add_start_docstrings(
-#     "The BigBirdPegasus Model with a language modeling head. Can be used for summarization.",
-#     BIGBIRD_PEGASUS_START_DOCSTRING,
-# )
 # Copied from transformers.models.bart.modeling_bart.BartForConditionalGeneration with Bart->BigBirdPegasus, BART->BIGBIRD_PEGASUS
+@add_start_docstrings(
+    "The BigBirdPegasus Model with a language modeling head. Can be used for summarization.",
+    BIGBIRD_PEGASUS_START_DOCSTRING,
+)
 class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, GenerationMixin):
     base_model_prefix = "model"
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight", "lm_head.weight"]
@@ -2486,9 +2486,9 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
             self.model._tie_weights()
             self._tie_or_clone_weights(self.lm_head, self.model.shared)
 
-    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    # @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
-    # @add_end_docstrings(BIGBIRD_PEGASUS_GENERATION_EXAMPLE)
+    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
+    @add_end_docstrings(BIGBIRD_PEGASUS_GENERATION_EXAMPLE)
     def construct(
         self,
         input_ids: ms.Tensor = None,
@@ -2584,13 +2584,13 @@ class BigBirdPegasusForConditionalGeneration(BigBirdPegasusPreTrainedModel, Gene
         return reordered_past
 
 
-# @add_start_docstrings(
-#     """
-#     BigBirdPegasus model with a sequence classification/head on top (a linear layer on top of the pooled output) e.g.
-#     for GLUE tasks.
-#     """,
-#     BIGBIRD_PEGASUS_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    """
+    BigBirdPegasus model with a sequence classification/head on top (a linear layer on top of the pooled output) e.g.
+    for GLUE tasks.
+    """,
+    BIGBIRD_PEGASUS_START_DOCSTRING,
+)
 class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -2607,12 +2607,12 @@ class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    # @add_code_sample_docstrings(
-    #     checkpoint=_CHECKPOINT_FOR_DOC,
-    #     output_type=Seq2SeqSequenceClassifierOutput,
-    #     config_class=_CONFIG_FOR_DOC,
-    # )
+    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    @add_code_sample_docstrings(
+        checkpoint=_CHECKPOINT_FOR_DOC,
+        output_type=Seq2SeqSequenceClassifierOutput,
+        config_class=_CONFIG_FOR_DOC,
+    )
     # Copied from transformers.models.bart.modeling_bart.BartForSequenceClassification.forward
     def construct(
         self,
@@ -2712,13 +2712,13 @@ class BigBirdPegasusForSequenceClassification(BigBirdPegasusPreTrainedModel):
         )
 
 
-# @add_start_docstrings(
-#     """
-#     BigBirdPegasus Model with a span classification head on top for extractive question-answering tasks like SQuAD (a
-#     linear layer on top of the hidden-states output to compute `span start logits` and `span end logits`).
-#     """,
-#     BIGBIRD_PEGASUS_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    """
+    BigBirdPegasus Model with a span classification head on top for extractive question-answering tasks like SQuAD (a
+    linear layer on top of the hidden-states output to compute `span start logits` and `span end logits`).
+    """,
+    BIGBIRD_PEGASUS_START_DOCSTRING,
+)
 class BigBirdPegasusForQuestionAnswering(BigBirdPegasusPreTrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -2734,12 +2734,12 @@ class BigBirdPegasusForQuestionAnswering(BigBirdPegasusPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    # @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
-    # @add_code_sample_docstrings(
-    #     checkpoint=_CHECKPOINT_FOR_DOC,
-    #     output_type=Seq2SeqQuestionAnsweringModelOutput,
-    #     config_class=_CONFIG_FOR_DOC,
-    # )
+    @add_start_docstrings_to_model_forward(BIGBIRD_PEGASUS_INPUTS_DOCSTRING)
+    @add_code_sample_docstrings(
+        checkpoint=_CHECKPOINT_FOR_DOC,
+        output_type=Seq2SeqQuestionAnsweringModelOutput,
+        config_class=_CONFIG_FOR_DOC,
+    )
     # Copied from transformers.models.bart.modeling_bart.BartForQuestionAnswering.forward
     def construct(
         self,
@@ -2884,7 +2884,7 @@ class BigBirdPegasusForCausalLM(BigBirdPegasusPreTrainedModel, GenerationMixin):
     def get_decoder(self):
         return self.model.decoder
 
-    # @replace_return_docstrings(output_type=CausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
+    @replace_return_docstrings(output_type=CausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
     def construct(
         self,
         input_ids: ms.Tensor = None,
