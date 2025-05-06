@@ -1047,7 +1047,7 @@ class CanineModel(CaninePreTrainedModel):
         poolable_char_mask = mint.reshape(char_attention_mask, (batch_size, 1, char_seq_len))
 
         # next, apply MaxPool1d to get pooled_molecule_mask of shape (batch_size, 1, mol_seq_len)
-        pooled_molecule_mask = mint.nn.MaxPool1d(kernel_size=downsampling_rate, stride=downsampling_rate)(
+        pooled_molecule_mask = nn.MaxPool1d(kernel_size=downsampling_rate, stride=downsampling_rate)(
             poolable_char_mask.float()
         )
 
