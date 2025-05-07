@@ -40,7 +40,7 @@ class ConvBertModelTester:
         type_vocab_size=16,
         type_sequence_label_size=2,
         initializer_range=0.02,
-        num_labels=3,
+        num_labels=2,
         num_choices=4,
         scope=None,
     ):
