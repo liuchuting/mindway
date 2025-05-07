@@ -266,7 +266,7 @@ class SeparableConv1D(nn.Cell):
             input_filters,
             input_filters,
             kernel_size=kernel_size,
-            groups=input_filters,
+            group=input_filters,
             padding=kernel_size // 2,
             has_bias=False,
             pad_mode='pad'
