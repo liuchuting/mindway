@@ -138,6 +138,7 @@ LLAMA_CASES = [
         "transformers.ConvBertForMultipleChoice",
         "mindway.transformers.ConvBertForMultipleChoice",
         (config,),
+        {},
         (np.repeat(np.expand_dims(input_ids, 1), model_tester.num_choices, 1),),
         {
             "attention_mask": np.repeat(np.expand_dims(input_mask, 1), model_tester.num_choices, 1),
