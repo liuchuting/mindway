@@ -300,6 +300,8 @@ class CharactersToMolecules(nn.Cell):
             out_channels=config.hidden_size,
             kernel_size=config.downsampling_rate,
             stride=config.downsampling_rate,
+            pad_mode='pad',
+            padding=0
         )
         self.activation = ACT2FN[config.hidden_act]
 
@@ -349,6 +351,8 @@ class ConvProjection(nn.Cell):
             out_channels=config.hidden_size,
             kernel_size=config.upsampling_kernel_size,
             stride=1,
+            pad_mode='pad',
+            padding=0
         )
         self.activation = ACT2FN[config.hidden_act]
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
@@ -1476,17 +1480,20 @@ class CanineForTokenClassification(CaninePreTrainedModel):
         Example:
 
         ```python
-        >>> from transformers import AutoTokenizer, CanineForTokenClassification
+        >>> from transformers import AutoTokenizer
+        >>> from mindway.transformers import CanineForTokenClassification
         >>> import mindspore as ms
 
         >>> tokenizer = AutoTokenizer.from_pretrained("google/canine-s")
         >>> model = CanineForTokenClassification.from_pretrained("google/canine-s")
 
         >>> inputs = tokenizer(
-        ...     "HuggingFace is a company based in Paris and New York", add_special_tokens=False, return_tensors="pt"
+        ...     "HuggingFace is a company based in Paris and New York", add_special_tokens=False, return_tensors="np"
         ... )
+        >>> for k, v in inputs.items():
+        ...     inputs[k] = ms.Tensor(v)
 
-        >>> with ms.no_grad():
+        >>> with ms._no_grad():
         ...     logits = model(**inputs).logits
 
         >>> predicted_token_class_ids = logits.argmax(-1)
