@@ -272,7 +272,7 @@ class SeparableConv1D(nn.Cell):
             pad_mode='pad'
         )
         self.pointwise = nn.Conv1d(input_filters, output_filters, kernel_size=1, has_bias=False, pad_mode='pad', padding=0)
-        self.bias = ms.Parameter(mint.zeros(output_filters, 1))
+        self.bias = ms.Parameter(mint.zeros((output_filters, 1)))
 
         self.depthwise.weight.data.normal_(mean=0.0, std=config.initializer_range)
         self.pointwise.weight.data.normal_(mean=0.0, std=config.initializer_range)
