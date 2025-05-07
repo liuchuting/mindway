@@ -172,14 +172,14 @@ class ConvBertEmbeddings(nn.Cell):
 
     def __init__(self, config):
         super().__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.embedding_size, padding_idx=config.pad_token_id)
-        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.embedding_size)
-        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.embedding_size)
+        self.word_embeddings = mint.nn.Embedding(config.vocab_size, config.embedding_size, padding_idx=config.pad_token_id)
+        self.position_embeddings = mint.nn.Embedding(config.max_position_embeddings, config.embedding_size)
+        self.token_type_embeddings = mint.nn.Embedding(config.type_vocab_size, config.embedding_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = nn.LayerNorm(config.embedding_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.LayerNorm = mint.nn.LayerNorm(config.embedding_size, eps=config.layer_norm_eps)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.position_ids = mint.arange(config.max_position_embeddings).expand((1, -1))
         self.token_type_ids = mint.zeros(self.position_ids.shape, dtype=ms.int64)
@@ -268,10 +268,11 @@ class SeparableConv1D(nn.Cell):
             kernel_size=kernel_size,
             groups=input_filters,
             padding=kernel_size // 2,
-            bias=False,
+            has_bias=False,
+            pad_mode='pad'
         )
-        self.pointwise = nn.Conv1d(input_filters, output_filters, kernel_size=1, bias=False)
-        self.bias = nn.Parameter(mint.zeros(output_filters, 1))
+        self.pointwise = nn.Conv1d(input_filters, output_filters, kernel_size=1, has_bias=False, pad_mode='pad', padding=0)
+        self.bias = ms.Parameter(mint.zeros(output_filters, 1))
 
         self.depthwise.weight.data.normal_(mean=0.0, std=config.initializer_range)
         self.pointwise.weight.data.normal_(mean=0.0, std=config.initializer_range)
@@ -307,21 +308,21 @@ class ConvBertSelfAttention(nn.Cell):
         self.attention_head_size = (config.hidden_size // self.num_attention_heads) // 2
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size)
+        self.query = mint.nn.Linear(config.hidden_size, self.all_head_size)
+        self.key = mint.nn.Linear(config.hidden_size, self.all_head_size)
+        self.value = mint.nn.Linear(config.hidden_size, self.all_head_size)
 
         self.key_conv_attn_layer = SeparableConv1D(
             config, config.hidden_size, self.all_head_size, self.conv_kernel_size
         )
-        self.conv_kernel_layer = nn.Linear(self.all_head_size, self.num_attention_heads * self.conv_kernel_size)
-        self.conv_out_layer = nn.Linear(config.hidden_size, self.all_head_size)
+        self.conv_kernel_layer = mint.nn.Linear(self.all_head_size, self.num_attention_heads * self.conv_kernel_size)
+        self.conv_out_layer = mint.nn.Linear(config.hidden_size, self.all_head_size)
 
-        self.unfold = nn.Unfold(
+        self.unfold = mint.nn.Unfold(
             kernel_size=[self.conv_kernel_size, 1], padding=[int((self.conv_kernel_size - 1) / 2), 0]
         )
 
-        self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.dropout = mint.nn.Dropout(config.attention_probs_dropout_prob)
 
     def transpose_for_scores(self, x):
         new_x_shape = x.shape[:-1] + (self.num_attention_heads, self.attention_head_size)
@@ -363,7 +364,7 @@ class ConvBertSelfAttention(nn.Cell):
         conv_out_layer = self.conv_out_layer(hidden_states)
         conv_out_layer = mint.reshape(conv_out_layer, [batch_size, -1, self.all_head_size])
         conv_out_layer = conv_out_layer.transpose(1, 2).contiguous().unsqueeze(-1)
-        conv_out_layer = nn.functional.unfold(
+        conv_out_layer = mint.nn.functional.unfold(
             conv_out_layer,
             kernel_size=[self.conv_kernel_size, 1],
             dilation=1,
@@ -385,7 +386,7 @@ class ConvBertSelfAttention(nn.Cell):
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
-        attention_probs = nn.functional.softmax(attention_scores, dim=-1)
+        attention_probs = mint.nn.functional.softmax(attention_scores, dim=-1)
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
@@ -414,9 +415,9 @@ class ConvBertSelfAttention(nn.Cell):
 class ConvBertSelfOutput(nn.Cell):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dense = mint.nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
 
     def construct(self, hidden_states: ms.Tensor, input_tensor: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -478,8 +479,8 @@ class GroupedLinearLayer(nn.Cell):
         self.num_groups = num_groups
         self.group_in_dim = self.input_size // self.num_groups
         self.group_out_dim = self.output_size // self.num_groups
-        self.weight = nn.Parameter(mint.empty(self.num_groups, self.group_in_dim, self.group_out_dim))
-        self.bias = nn.Parameter(mint.empty(output_size))
+        self.weight = ms.Parameter(mint.empty(self.num_groups, self.group_in_dim, self.group_out_dim))
+        self.bias = ms.Parameter(mint.empty(output_size))
 
     def construct(self, hidden_states: ms.Tensor) -> ms.Tensor:
         batch_size = list(hidden_states.shape)[0]
@@ -496,7 +497,7 @@ class ConvBertIntermediate(nn.Cell):
     def __init__(self, config):
         super().__init__()
         if config.num_groups == 1:
-            self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+            self.dense = mint.nn.Linear(config.hidden_size, config.intermediate_size)
         else:
             self.dense = GroupedLinearLayer(
                 input_size=config.hidden_size, output_size=config.intermediate_size, num_groups=config.num_groups
@@ -516,13 +517,13 @@ class ConvBertOutput(nn.Cell):
     def __init__(self, config):
         super().__init__()
         if config.num_groups == 1:
-            self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+            self.dense = mint.nn.Linear(config.intermediate_size, config.hidden_size)
         else:
             self.dense = GroupedLinearLayer(
                 input_size=config.intermediate_size, output_size=config.hidden_size, num_groups=config.num_groups
             )
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.LayerNorm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = mint.nn.Dropout(config.hidden_dropout_prob)
 
     def construct(self, hidden_states: ms.Tensor, input_tensor: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -664,12 +665,12 @@ class ConvBertEncoder(nn.Cell):
 class ConvBertPredictionHeadTransform(nn.Cell):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = mint.nn.Linear(config.hidden_size, config.hidden_size)
         if isinstance(config.hidden_act, str):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = mint.nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def construct(self, hidden_states: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -752,7 +753,7 @@ class ConvBertModel(ConvBertPreTrainedModel):
         self.embeddings = ConvBertEmbeddings(config)
 
         if config.embedding_size != config.hidden_size:
-            self.embeddings_project = nn.Linear(config.embedding_size, config.hidden_size)
+            self.embeddings_project = mint.nn.Linear(config.embedding_size, config.hidden_size)
 
         self.encoder = ConvBertEncoder(config)
         self.config = config
@@ -848,8 +849,8 @@ class ConvBertGeneratorPredictions(nn.Cell):
         super().__init__()
 
         self.activation = get_activation("gelu")
-        self.LayerNorm = nn.LayerNorm(config.embedding_size, eps=config.layer_norm_eps)
-        self.dense = nn.Linear(config.hidden_size, config.embedding_size)
+        self.LayerNorm = mint.nn.LayerNorm(config.embedding_size, eps=config.layer_norm_eps)
+        self.dense = mint.nn.Linear(config.hidden_size, config.embedding_size)
 
     def construct(self, generator_hidden_states: ms.Tensor) -> ms.Tensor:
         hidden_states = self.dense(generator_hidden_states)
@@ -869,7 +870,7 @@ class ConvBertForMaskedLM(ConvBertPreTrainedModel):
         self.convbert = ConvBertModel(config)
         self.generator_predictions = ConvBertGeneratorPredictions(config)
 
-        self.generator_lm_head = nn.Linear(config.embedding_size, config.vocab_size)
+        self.generator_lm_head = mint.nn.Linear(config.embedding_size, config.vocab_size)
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -945,12 +946,12 @@ class ConvBertClassificationHead(nn.Cell):
 
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = mint.nn.Linear(config.hidden_size, config.hidden_size)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
-        self.dropout = nn.Dropout(classifier_dropout)
-        self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
+        self.dropout = mint.nn.Dropout(classifier_dropout)
+        self.out_proj = mint.nn.Linear(config.hidden_size, config.num_labels)
 
         self.config = config
 
@@ -1072,7 +1073,7 @@ class ConvBertForMultipleChoice(ConvBertPreTrainedModel):
 
         self.convbert = ConvBertModel(config)
         self.sequence_summary = SequenceSummary(config)
-        self.classifier = nn.Linear(config.hidden_size, 1)
+        self.classifier = mint.nn.Linear(config.hidden_size, 1)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1168,8 +1169,8 @@ class ConvBertForTokenClassification(ConvBertPreTrainedModel):
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
-        self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.dropout = mint.nn.Dropout(classifier_dropout)
+        self.classifier = mint.nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1246,7 +1247,7 @@ class ConvBertForQuestionAnswering(ConvBertPreTrainedModel):
 
         self.num_labels = config.num_labels
         self.convbert = ConvBertModel(config)
-        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
+        self.qa_outputs = mint.nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
