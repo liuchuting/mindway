@@ -124,5 +124,14 @@ from .models.umt5 import (
     UMT5Model,
     UMT5PreTrainedModel,
 )
+from .models.convbert import (
+    ConvBertForMaskedLM,
+    ConvBertForMultipleChoice,
+    ConvBertForQuestionAnswering,
+    ConvBertForSequenceClassification,
+    ConvBertForTokenClassification,
+    ConvBertLayer,
+    ConvBertModel,
+)
 from .models.xlm_roberta import XLMRobertaModel, XLMRobertaPreTrainedModel
 from .processing_utils import ProcessorMixin
