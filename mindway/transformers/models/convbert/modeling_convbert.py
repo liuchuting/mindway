@@ -181,12 +181,14 @@ class ConvBertEmbeddings(nn.Cell):
         self.LayerNorm = nn.LayerNorm(config.embedding_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
-        self.register_buffer(
-            "position_ids", mint.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
-        )
-        self.register_buffer(
-            "token_type_ids", mint.zeros(self.position_ids.shape, dtype=ms.int64), persistent=False
-        )
+        self.position_ids = mint.arange(config.max_position_embeddings).expand((1, -1))
+        self.token_type_ids = mint.zeros(self.position_ids.shape, dtype=ms.int64)
+        # self.register_buffer(
+        #     "position_ids", mint.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
+        # )
+        # self.register_buffer(
+        #     "token_type_ids", mint.zeros(self.position_ids.shape, dtype=ms.int64), persistent=False
+        # )
 
     def construct(
         self,
