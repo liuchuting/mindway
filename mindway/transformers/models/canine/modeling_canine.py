@@ -486,7 +486,7 @@ class CanineSelfAttention(nn.Cell):
         if head_mask is not None:
             attention_probs = attention_probs * head_mask
 
-        context_layer = mint.matmul(attention_probs, value_layer)
+        context_layer = mint.matmul(attention_probs.to(value_layer.dtype), value_layer)  # Cast
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
