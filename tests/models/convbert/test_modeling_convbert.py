@@ -267,7 +267,7 @@ def test_named_modules(
         ms_outputs_n = []
         for pt_key, ms_idx in outputs_map.items():
             pt_output = getattr(pt_outputs, pt_key)
-            ms_output = ms_outputs[ms_idx]
+            ms_output = ms_outputs[pt_key]
             if isinstance(pt_output, (list, tuple)):
                 pt_outputs_n += list(pt_output)
                 ms_outputs_n += list(ms_output)
