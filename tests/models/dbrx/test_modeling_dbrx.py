@@ -298,7 +298,7 @@ class DbrxModelIntegrationTest(unittest.TestCase):
                 ]
             ]
         )
-        THRESHOLD = DTYPE_AND_THRESHOLDS[ms.float32]
+        THRESHOLD = DTYPE_AND_THRESHOLDS["fp32"]
         diffs = np.linalg.norm(expected_slice - output[:, :3, :3].asnumpy()) / np.linalg.norm(expected_slice)
         assert (np.array(diffs) < THRESHOLD).all(), (
             f"Outputs({np.array(diffs).tolist()}) has diff bigger than {THRESHOLD}"
