@@ -1228,7 +1228,7 @@ class ElectraForMaskedLM(ElectraPreTrainedModel):
         loss = None
         # Masked language modeling softmax layer
         if labels is not None:
-            loss_fct = nn.mint.nn.CrossEntropyLoss()  # -100 index = padding token
+            loss_fct = mint.nn.CrossEntropyLoss()  # -100 index = padding token
             loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
 
         if not return_dict:
