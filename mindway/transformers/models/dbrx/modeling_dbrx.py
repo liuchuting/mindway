@@ -546,8 +546,6 @@ class DbrxSdpaAttention(DbrxAttention):
             key_states,
             value_states,
             attn_mask=causal_mask,
-            dropout_p=self.attn_pdrop if self.training else 0.0,
-            is_causal=is_causal,
         )
 
         attn_output = attn_output.swapaxes(1, 2).contiguous()
@@ -1224,7 +1222,7 @@ class DbrxModel(DbrxPreTrainedModel):
             causal_mask *= mint.arange(target_length) > cache_position.reshape(-1, 1)
             causal_mask = causal_mask[None, None, :, :].expand((batch_size, 1, -1, -1))
             if attention_mask is not None:
-                causal_mask = causal_mask.clone()  # copy to contiguous memory for in-place edit
+                causal_mask = causal_mask.copy()  # copy to contiguous memory for in-place edit
                 mask_length = attention_mask.shape[-1]
                 padding_mask = causal_mask[:, :, :, :mask_length] + attention_mask[:, None, None, :]
                 padding_mask = padding_mask == 0
