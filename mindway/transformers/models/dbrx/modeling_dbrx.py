@@ -633,7 +633,7 @@ class DbrxRouter(nn.Cell):
                 1.0 - self.moe_jitter_eps, 1.0 + self.moe_jitter_eps
             )
         hidden_states = hidden_states.view(-1, hidden_states.shape[-1])
-        weights = self.layer(hidden_states).softmax(dim=-1, dtype=ms.float32)
+        weights = self.layer(hidden_states).softmax(axis=-1, dtype=ms.float32)
         top_weights, top_experts = mint.topk(weights, self.moe_top_k, dim=-1)
 
         top_weights_scale = (
