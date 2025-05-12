@@ -702,9 +702,9 @@ class DbrxExperts(nn.Cell):
         w2_chunked = self.mlp.w2.view(self.mlp.moe_num_experts, self.mlp.ffn_hidden_size, self.mlp.hidden_size).chunk(
             self.moe_num_experts, dim=0
         )
-        w1_chunked = [w1.squeeze(dim=0) for w1 in w1_chunked]
-        v1_chunked = [v1.squeeze(dim=0) for v1 in v1_chunked]
-        w2_chunked = [w2.squeeze(dim=0) for w2 in w2_chunked]
+        w1_chunked = [w1.squeeze(0) for w1 in w1_chunked]
+        v1_chunked = [v1.squeeze(0) for v1 in v1_chunked]
+        w2_chunked = [w2.squeeze(0) for w2 in w2_chunked]
         for expert_idx in range(0, self.moe_num_experts):
             # (This cause torch.compile to fail with `torch._dynamo.exc.Unsupported: dynamic shape operator: aten.nonzero.default`)
             # (set torch._dynamo.config.capture_dynamic_output_shape_ops = True may help but not tested)
