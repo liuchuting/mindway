@@ -172,6 +172,17 @@ from .models.umt5 import (
     UMT5Model,
     UMT5PreTrainedModel,
 )
+from .models.electra import (
+    ElectraForCausalLM,
+    ElectraForMaskedLM,
+    ElectraForMultipleChoice,
+    ElectraForPreTraining,
+    ElectraForQuestionAnswering,
+    ElectraForSequenceClassification,
+    ElectraForTokenClassification,
+    ElectraModel,
+    ElectraPreTrainedModel,
+)
 from .models.xlm_roberta import XLMRobertaModel, XLMRobertaPreTrainedModel
 from .pipelines import TextGenerationPipeline, pipeline
 from .processing_utils import ProcessorMixin
