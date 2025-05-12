@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import torch
 from transformers import DbrxConfig
-
+import unittest
 import mindspore as ms
-
+from mindway.transformers import DbrxForCausalLM
 from tests.modeling_test_utils import (
     MS_DTYPE_MAPPING,
     PT_DTYPE_MAPPING,
@@ -277,3 +277,25 @@ def test_named_modules(
         f"ms_dtype: {ms_dtype}, pt_type:{pt_dtype}, "
         f"Outputs({np.array(diffs).tolist()}) has diff bigger than {THRESHOLD}"
     )
+
+
+class DbrxModelIntegrationTest(unittest.TestCase):
+    def test_tiny_model_logits(self):
+        model = DbrxForCausalLM.from_pretrained("Rocketknight1/dbrx-tiny-random")
+        input_ids = ms.tensor([[0, 1, 2, 3, 4, 5]])
+        output = model(input_ids)[0]
+        vocab_size = model.vocab_size
+
+        expected_shape = (1, 6, vocab_size)
+        self.assertEqual(output.shape, expected_shape)
+
+        expected_slice = ms.tensor(
+            [
+                [
+                    [-1.6300e-04, 5.0118e-04, 2.5437e-04],
+                    [2.0422e-05, 2.7210e-04, -1.5125e-04],
+                    [-1.5105e-04, 4.6879e-04, 3.3309e-04],
+                ]
+            ]
+        )
+        torch.testing.assert_close(output[:, :3, :3], expected_slice, rtol=1e-4, atol=1e-4)
