@@ -298,4 +298,8 @@ class DbrxModelIntegrationTest(unittest.TestCase):
                 ]
             ]
         )
-        torch.testing.assert_close(ms.Tensor(output[:, :3, :3]), expected_slice, rtol=1e-4, atol=1e-4)
+        diffs = compute_diffs(output[:, :3, :3], expected_slice)
+        THRESHOLD = DTYPE_AND_THRESHOLDS[ms.float32]
+        assert (np.array(diffs) < THRESHOLD).all(), (
+            f"Outputs({np.array(diffs).tolist()}) has diff bigger than {THRESHOLD}"
+        )
