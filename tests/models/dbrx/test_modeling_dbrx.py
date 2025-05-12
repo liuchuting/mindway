@@ -289,7 +289,7 @@ class DbrxModelIntegrationTest(unittest.TestCase):
         expected_shape = (1, 6, vocab_size)
         self.assertEqual(output.shape, expected_shape)
 
-        expected_slice = ms.tensor(
+        expected_slice = np.array(
             [
                 [
                     [-1.6300e-04, 5.0118e-04, 2.5437e-04],
@@ -298,8 +298,8 @@ class DbrxModelIntegrationTest(unittest.TestCase):
                 ]
             ]
         )
-        diffs = compute_diffs(output[:, :3, :3], expected_slice)
         THRESHOLD = DTYPE_AND_THRESHOLDS[ms.float32]
+        diffs = np.linalg.norm(expected_slice - output[:, :3, :3].asnumpy()) / np.linalg.norm(expected_slice)
         assert (np.array(diffs) < THRESHOLD).all(), (
             f"Outputs({np.array(diffs).tolist()}) has diff bigger than {THRESHOLD}"
         )
