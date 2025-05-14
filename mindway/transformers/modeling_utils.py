@@ -443,7 +443,7 @@ class ModuleUtilsMixin:
             # Provided a padding mask of dimensions [batch_size, seq_length]
             # - if the model is a decoder, apply a causal mask in addition to the padding mask
             # - if the model is an encoder, make the mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
-            if self.is_decoder:
+            if self.config.is_decoder:
                 extended_attention_mask = ModuleUtilsMixin.create_extended_attention_mask_for_decoder(
                     input_shape, attention_mask
                 )
