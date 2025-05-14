@@ -301,7 +301,8 @@ class CharactersToMolecules(nn.Cell):
             kernel_size=config.downsampling_rate,
             stride=config.downsampling_rate,
             pad_mode='pad',
-            padding=0
+            padding=0,
+            has_bias=True
         )
         self.activation = ACT2FN[config.hidden_act]
 
@@ -352,7 +353,8 @@ class ConvProjection(nn.Cell):
             kernel_size=config.upsampling_kernel_size,
             stride=1,
             pad_mode='pad',
-            padding=0
+            padding=0,
+            has_bias=True
         )
         self.activation = ACT2FN[config.hidden_act]
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
