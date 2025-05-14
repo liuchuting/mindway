@@ -47,7 +47,7 @@ from transformers.utils  import (
     logging,
     replace_return_docstrings,
 )
-from .configuration_camembert import CamembertConfig
+from transformers.models.camembert.configuration_camembert import CamembertConfig
 
 
 logger = logging.get_logger(__name__)

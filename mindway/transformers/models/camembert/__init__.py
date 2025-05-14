@@ -8,4 +8,3 @@ from .modeling_camembert import (
     CamembertModel,
     CamembertPreTrainedModel,
 )
-from .configuration_camembert import CamembertConfig
